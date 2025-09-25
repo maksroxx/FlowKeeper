@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+
+package stock;
+
+
+service StockService {
+rpc AddItem (AddItemRequest) returns (ItemResponse);
+rpc ListItems (ListItemsRequest) returns (ListItemsResponse);
+}
+
+
+message AddItemRequest {
+string name = 1;
+int32 stock = 2;
+}
+
+
+message ItemResponse {
+uint32 id = 1;
+string name = 2;
+int32 stock = 3;
+}
+
+
+message ListItemsRequest {}
+
+
+message ListItemsResponse {
+repeated ItemResponse items = 1;
+}
