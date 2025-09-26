@@ -13,6 +13,6 @@ func InitAPI(r *gin.Engine, app *core.App) {
 	})
 
 	for _, module := range app.Modules() {
-		module.RegisterRoutes(api, app.DB())
+		module.RegisterRoutes(r, app.DB())
 	}
 }

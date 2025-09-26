@@ -1,54 +1,60 @@
 package stock
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
+	"github.com/maksroxx/flowkeeper/internal/modules/stock/handler"
+	stock "github.com/maksroxx/flowkeeper/internal/modules/stock/models"
+	"github.com/maksroxx/flowkeeper/internal/modules/stock/repository"
+	"github.com/maksroxx/flowkeeper/internal/modules/stock/service"
 	"gorm.io/gorm"
 )
 
 type Module struct{}
 
-func NewModule() *Module {
-	return &Module{}
-}
+func NewModule() *Module { return &Module{} }
 
 func (m *Module) Name() string { return "stock" }
 
-func (m *Module) Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(&Item{}, &StockMovement{})
+func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
+	grp := r.Group("/api/v1/stock")
+
+	// repositories
+	catRepo := repository.NewCategoryRepository(db)
+	cpRepo := repository.NewCounterpartyRepository(db)
+	docRepo := repository.NewDocumentRepository(db)
+	itemRepo := repository.NewItemRepository(db)
+	movRepo := repository.NewStockMovementRepository(db)
+	unitRepo := repository.NewUnitRepository(db)
+	whRepo := repository.NewWarehouseRepository(db)
+
+	// services
+	catSvc := service.NewCategoryService(catRepo)
+	cpSvc := service.NewCounterpartyService(cpRepo)
+	docSvc := service.NewDocumentService(docRepo)
+	itemSvc := service.NewItemService(itemRepo)
+	movSvc := service.NewStockMovementService(movRepo)
+	unitSvc := service.NewUnitService(unitRepo)
+	whSvc := service.NewWarehouseService(whRepo)
+
+	// handlers
+	handler.NewCategoryHandler(catSvc).Register(grp)
+	handler.NewCounterpartyHandler(cpSvc).Register(grp)
+	handler.NewDocumentHandler(docSvc).Register(grp)
+	handler.NewItemHandler(itemSvc).Register(grp)
+	handler.NewMovementHandler(movSvc).Register(grp)
+	handler.NewUnitHandler(unitSvc).Register(grp)
+	handler.NewWarehouseHandler(whSvc).Register(grp)
 }
 
-func (m *Module) RegisterRoutes(r *gin.RouterGroup, db *gorm.DB) {
-	repo := &itemRepository{db: db}
-	service := &stockService{repo: repo}
-
-	group := r.Group("/stock")
-	{
-		group.POST("/items", func(c *gin.Context) {
-			var req struct {
-				Name  string `json:"name"`
-				Stock int    `json:"stock"`
-			}
-			if err := c.ShouldBindJSON(&req); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-				return
-			}
-			item, err := service.AddItem(req.Name, req.Stock)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-			c.JSON(http.StatusOK, item)
-		})
-
-		group.GET("/items", func(c *gin.Context) {
-			items, err := service.ListItems()
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-			c.JSON(http.StatusOK, items)
-		})
-	}
+func (m *Module) Migrate(db *gorm.DB) error {
+	return db.AutoMigrate(
+		&stock.Category{},
+		&stock.Counterparty{},
+		&stock.Document{},
+		&stock.DocumentItem{},
+		&stock.Item{},
+		&stock.StockMovement{},
+		&stock.Unit{},
+		&stock.Warehouse{},
+	)
 }

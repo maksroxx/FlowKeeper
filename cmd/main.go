@@ -10,7 +10,6 @@ import (
 	"github.com/maksroxx/flowkeeper/internal/core"
 	"github.com/maksroxx/flowkeeper/internal/db"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock"
-	"github.com/maksroxx/flowkeeper/internal/modules/users"
 )
 
 func main() {
@@ -25,15 +24,16 @@ func main() {
 	}
 
 	r := gin.Default()
+	r.RedirectTrailingSlash = true
 	app := core.NewApp(database, r)
 
 	if cfg.Modules.Stock {
 		app.RegisterModule(stock.NewModule())
 	}
 
-	if cfg.Modules.Users {
-		app.RegisterModule(users.NewModule())
-	}
+	// if cfg.Modules.Users {
+	// 	app.RegisterModule(users.NewModule())
+	// }
 
 	if err := app.Migrate(); err != nil {
 		log.Fatal(err)

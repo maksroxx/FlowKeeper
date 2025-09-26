@@ -8,5 +8,5 @@ database:
 
 modules:
   stock: true
-  users: true
+  users: false
   shop: false

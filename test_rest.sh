@@ -1,50 +1,49 @@
 #!/bin/bash
 
-BASE_URL="http://localhost:8080/api/v1"
+BASE_URL="http://0.0.0.0:8080/api/v1"
 
 echo "=== HEALTH CHECK ==="
 curl -s $BASE_URL/health | jq
-echo -e "\n"
+echo
 
-# ----------------------------
-# STOCK MODULE
-# ----------------------------
-echo "=== TEST STOCK MODULE ==="
+# --- Categories ---
+echo "=== TEST CATEGORIES ==="
+curl -s -X POST $BASE_URL/stock/categories -H "Content-Type: application/json" -d '{"name":"Электроника"}' | jq
+curl -s $BASE_URL/stock/categories | jq
+echo
 
-STOCK_NAME="Телефон_$(date +%s)"
-echo "Creating stock item: $STOCK_NAME"
+# --- Units ---
+echo "=== TEST UNITS ==="
+curl -s -X POST $BASE_URL/stock/units -H "Content-Type: application/json" -d '{"name":"шт"}' | jq
+curl -s $BASE_URL/stock/units | jq
+echo
 
-curl -s -X POST $BASE_URL/stock/items \
-  -H "Content-Type: application/json" \
-  -d "{\"name\":\"$STOCK_NAME\",\"stock\":10}" | jq
-echo -e "\n"
+# --- Warehouses ---
+echo "=== TEST WAREHOUSES ==="
+curl -s -X POST $BASE_URL/stock/warehouses -H "Content-Type: application/json" -d '{"name":"Основной склад","address":"Москва"}' | jq
+curl -s $BASE_URL/stock/warehouses | jq
+echo
 
-echo "Listing stock items..."
+# --- Counterparties ---
+echo "=== TEST COUNTERPARTIES ==="
+curl -s -X POST $BASE_URL/stock/counterparties -H "Content-Type: application/json" -d '{"name":"Поставщик 1"}' | jq
+curl -s $BASE_URL/stock/counterparties | jq
+echo
+
+# --- Items ---
+echo "=== TEST ITEMS ==="
+curl -s -X POST $BASE_URL/stock/items -H "Content-Type: application/json" -d '{"name":"Телефон","sku":"TEL001","unit_id":1,"category_id":1,"price":10000}' | jq
 curl -s $BASE_URL/stock/items | jq
-echo -e "\n"
+echo
 
-# ----------------------------
-# USERS MODULE (опционально)
-# ----------------------------
-echo "=== TEST USERS MODULE ==="
+# --- Stock Movements ---
+echo "=== TEST STOCK MOVEMENTS ==="
+curl -s -X POST $BASE_URL/stock/movements -H "Content-Type: application/json" -d '{"item_id":1,"warehouse_id":1,"counterparty_id":1,"quantity":10,"type":"in","comment":"Поставка"}' | jq
+curl -s $BASE_URL/stock/movements | jq
+echo
 
-# Проверяем, доступен ли endpoint /users
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" $BASE_URL/users)
-
-if [ "$HTTP_CODE" -eq 200 ]; then
-    USER_NAME="Иван_$(date +%s)"
-    USER_EMAIL="ivan_$(date +%s)@test.com"
-
-    echo "Creating user: $USER_NAME"
-
-    curl -s -X POST $BASE_URL/users \
-      -H "Content-Type: application/json" \
-      -d "{\"name\":\"$USER_NAME\",\"email\":\"$USER_EMAIL\",\"password\":\"123\",\"role\":\"admin\"}" | jq
-    echo -e "\n"
-
-    echo "Listing users..."
-    curl -s $BASE_URL/users | jq
-    echo -e "\n"
-else
-    echo "Users module is disabled, skipping..."
-fi
+# --- Documents ---
+echo "=== TEST DOCUMENTS ==="
+curl -s -X POST $BASE_URL/stock/documents -H "Content-Type: application/json" -d '{"type":"Invoice","number":"INV001","warehouse_id":1,"counterparty_id":1,"comment":"Документ поставки","items":[{"item_id":1,"quantity":10}]}' | jq
+curl -s $BASE_URL/stock/documents | jq
+echo

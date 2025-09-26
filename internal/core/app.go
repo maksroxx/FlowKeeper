@@ -8,7 +8,7 @@ import (
 type Module interface {
 	Name() string
 	Migrate(db *gorm.DB) error
-	RegisterRoutes(r *gin.RouterGroup, db *gorm.DB)
+	RegisterRoutes(r *gin.Engine, db *gorm.DB)
 }
 
 type App struct {
