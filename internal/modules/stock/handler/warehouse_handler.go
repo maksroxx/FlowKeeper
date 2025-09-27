@@ -5,56 +5,98 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	stock "github.com/maksroxx/flowkeeper/internal/modules/stock/models"
+	"github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/service"
 )
 
 type WarehouseHandler struct {
-	svc service.WarehouseService
+	service service.WarehouseService
 }
 
-func NewWarehouseHandler(svc service.WarehouseService) *WarehouseHandler {
-	return &WarehouseHandler{svc: svc}
+func NewWarehouseHandler(s service.WarehouseService) *WarehouseHandler {
+	return &WarehouseHandler{service: s}
 }
 
 func (h *WarehouseHandler) Register(r *gin.RouterGroup) {
 	grp := r.Group("/warehouses")
 	{
-		grp.POST("/", h.Create)
-		grp.GET("/", h.List)
+		grp.POST("", h.Create)
+		grp.GET("", h.List)
 		grp.GET("/:id", h.GetByID)
+		grp.PUT("/:id", h.Update)
+		grp.DELETE("/:id", h.Delete)
 	}
 }
 
 func (h *WarehouseHandler) Create(c *gin.Context) {
-	var w stock.Warehouse
-	if err := c.ShouldBindJSON(&w); err != nil {
+	var wh models.Warehouse
+	if err := c.ShouldBindJSON(&wh); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	created, err := h.svc.Create(w.Name, w.Address)
+
+	createdWarehouse, err := h.service.Create(wh.Name, wh.Address)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, created)
+	c.JSON(http.StatusCreated, createdWarehouse)
 }
 
 func (h *WarehouseHandler) List(c *gin.Context) {
-	ws, err := h.svc.List()
+	warehouses, err := h.service.List()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, ws)
+	c.JSON(http.StatusOK, warehouses)
 }
 
 func (h *WarehouseHandler) GetByID(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	w, err := h.svc.GetByID(uint(id))
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
 		return
 	}
-	c.JSON(http.StatusOK, w)
+	warehouse, err := h.service.GetByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Warehouse not found"})
+		return
+	}
+	c.JSON(http.StatusOK, warehouse)
+}
+
+func (h *WarehouseHandler) Update(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	var wh models.Warehouse
+	if err := c.ShouldBindJSON(&wh); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	wh.ID = uint(id)
+
+	updatedWarehouse, err := h.service.Update(&wh)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, updatedWarehouse)
+}
+
+func (h *WarehouseHandler) Delete(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+	if err := h.service.Delete(uint(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusNoContent)
 }

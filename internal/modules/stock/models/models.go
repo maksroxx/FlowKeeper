@@ -1,8 +1,7 @@
-package stock
+package models
 
 import "time"
 
-// Item
 type Item struct {
 	ID         uint   `gorm:"primaryKey"`
 	Name       string `gorm:"unique;not null"`
@@ -12,59 +11,82 @@ type Item struct {
 	Price      float64
 }
 
-// Category
+type DocumentHistory struct {
+	ID         uint `gorm:"primaryKey"`
+	DocumentID uint
+	Action     string // "posted", "canceled"
+	CreatedAt  time.Time
+	CreatedBy  *uint
+	Comment    string
+}
+
 type Category struct {
 	ID   uint   `gorm:"primaryKey"`
 	Name string `gorm:"unique;not null"`
 }
 
-// Unit
 type Unit struct {
 	ID   uint   `gorm:"primaryKey"`
 	Name string `gorm:"unique;not null"`
 }
 
-// Warehouse
 type Warehouse struct {
 	ID      uint   `gorm:"primaryKey"`
 	Name    string `gorm:"not null"`
 	Address string
 }
 
-// Counterparty
 type Counterparty struct {
 	ID   uint   `gorm:"primaryKey"`
 	Name string `gorm:"unique;not null"`
 }
 
-// StockMovement
-type StockMovement struct {
-	ID             uint `gorm:"primaryKey"`
-	ItemID         uint
-	WarehouseID    uint
-	CounterpartyID *uint
-	Quantity       int
-	Type           string
-	Comment        string
-	CreatedAt      time.Time
-}
-
-// Document
+// Document + items
 type Document struct {
-	ID             uint `gorm:"primaryKey"`
-	Type           string
-	Number         string
+	ID             uint   `gorm:"primaryKey"`
+	Type           string // INCOME, OUTCOME, TRANSFER, INVENTORY
+	Number         string `gorm:"uniqueIndex"`
 	WarehouseID    *uint
+	ToWarehouseID  *uint
 	CounterpartyID *uint
 	Comment        string
-	Items          []DocumentItem `gorm:"foreignKey:DocumentID"`
+	Items          []DocumentItem `gorm:"foreignKey:DocumentID;constraint:OnDelete:CASCADE"`
+	Status         string         `gorm:"default:draft"` // draft|posted|canceled
+	CreatedBy      *uint
+	PostedAt       *time.Time
 	CreatedAt      time.Time
 }
 
-// DocumentItem
 type DocumentItem struct {
 	ID         uint `gorm:"primaryKey"`
 	DocumentID uint
 	ItemID     uint
 	Quantity   int
+}
+
+// StockMovement: теперь с DocumentID
+type StockMovement struct {
+	ID             uint  `gorm:"primaryKey"`
+	DocumentID     *uint `gorm:"index"`
+	ItemID         uint
+	WarehouseID    uint
+	CounterpartyID *uint
+	Quantity       int    // signed: + for in, - for out
+	Type           string // income/outcome/transfer/inventory/cancel
+	Comment        string
+	CreatedAt      time.Time
+}
+
+// StockBalance
+type StockBalance struct {
+	ID          uint `gorm:"primaryKey"`
+	WarehouseID uint `gorm:"index:idx_wh_item,unique"`
+	ItemID      uint `gorm:"index:idx_wh_item,unique"`
+	Quantity    int
+}
+
+type StockFilter struct {
+	CategoryID *uint
+	SKU        *string
+	MinQty     *int
 }

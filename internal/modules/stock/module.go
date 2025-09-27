@@ -26,11 +26,15 @@ func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	movRepo := repository.NewStockMovementRepository(db)
 	unitRepo := repository.NewUnitRepository(db)
 	whRepo := repository.NewWarehouseRepository(db)
+	balanceRepo := repository.NewBalanceRepository(db)
+	historyRepo := repository.NewDocumentHistoryRepository(db)
+	txManager := repository.NewTxManager(db)
 
 	// services
 	catSvc := service.NewCategoryService(catRepo)
 	cpSvc := service.NewCounterpartyService(cpRepo)
-	docSvc := service.NewDocumentService(docRepo)
+	inventorySvc := service.NewInventoryService(balanceRepo, movRepo, txManager)
+	docSvc := service.NewDocumentService(docRepo, historyRepo, inventorySvc, txManager)
 	itemSvc := service.NewItemService(itemRepo)
 	movSvc := service.NewStockMovementService(movRepo)
 	unitSvc := service.NewUnitService(unitRepo)
@@ -44,6 +48,7 @@ func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	handler.NewMovementHandler(movSvc).Register(grp)
 	handler.NewUnitHandler(unitSvc).Register(grp)
 	handler.NewWarehouseHandler(whSvc).Register(grp)
+	handler.NewBalanceHandler(inventorySvc).Register(grp)
 }
 
 func (m *Module) Migrate(db *gorm.DB) error {
@@ -56,5 +61,7 @@ func (m *Module) Migrate(db *gorm.DB) error {
 		&stock.StockMovement{},
 		&stock.Unit{},
 		&stock.Warehouse{},
+		&stock.StockBalance{},
+		&stock.DocumentHistory{},
 	)
 }
