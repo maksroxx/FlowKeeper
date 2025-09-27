@@ -35,7 +35,7 @@ func (h *ItemHandler) Create(c *gin.Context) {
 		return
 	}
 
-	createdItem, err := h.service.Create(item.Name, item.SKU, item.UnitID, item.CategoryID, item.Price)
+	createdItem, err := h.service.Create(item.Name, item.SKU, item.UnitID, item.CategoryID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

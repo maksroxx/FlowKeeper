@@ -47,7 +47,17 @@ func (h *DocumentHandler) Create(c *gin.Context) {
 }
 
 func (h *DocumentHandler) List(c *gin.Context) {
-	docs, err := h.service.List()
+	status := c.Query("status")
+
+	var docs []models.Document
+	var err error
+
+	if status != "" {
+		docs, err = h.service.ListByStatus(status)
+	} else {
+		docs, err = h.service.List()
+	}
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

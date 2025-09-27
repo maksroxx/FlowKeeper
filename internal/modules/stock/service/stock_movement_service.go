@@ -5,10 +5,11 @@ import (
 
 	stock "github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/repository"
+	"github.com/shopspring/decimal"
 )
 
 type StockMovementService interface {
-	Create(itemID, warehouseID uint, counterpartyID *uint, qty int, mtype, comment string) (*stock.StockMovement, error)
+	Create(itemID, warehouseID uint, counterpartyID *uint, qty decimal.Decimal, mtype, comment string) (*stock.StockMovement, error)
 	GetByID(id uint) (*stock.StockMovement, error)
 	List() ([]stock.StockMovement, error)
 	Update(m *stock.StockMovement) (*stock.StockMovement, error)
@@ -23,7 +24,7 @@ func NewStockMovementService(r repository.StockMovementRepository) StockMovement
 	return &movementService{repo: r}
 }
 
-func (s *movementService) Create(itemID, warehouseID uint, counterpartyID *uint, qty int, mtype, comment string) (*stock.StockMovement, error) {
+func (s *movementService) Create(itemID, warehouseID uint, counterpartyID *uint, qty decimal.Decimal, mtype, comment string) (*stock.StockMovement, error) {
 	return s.repo.Create(&stock.StockMovement{
 		ItemID:         itemID,
 		WarehouseID:    warehouseID,

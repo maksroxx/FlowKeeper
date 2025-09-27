@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 
 	stock "github.com/maksroxx/flowkeeper/internal/modules/stock/models"
@@ -17,7 +18,7 @@ type InventoryService interface {
 	ProcessDocumentWithTx(tx *gorm.DB, doc *stock.Document) error
 	RevertDocumentWithTx(tx *gorm.DB, doc *stock.Document) error
 
-	GetBalance(warehouseID, itemID uint) (int, error)
+	GetBalance(warehouseID, itemID uint) (decimal.Decimal, error)
 	ListByWarehouse(warehouseID uint) ([]stock.StockBalance, error)
 	ListByWarehouseFiltered(warehouseID uint, f stock.StockFilter) ([]stock.StockBalance, error)
 }
@@ -36,13 +37,13 @@ func NewInventoryService(b repository.BalanceRepository, m repository.StockMovem
 	}
 }
 
-func (s *inventoryService) GetBalance(warehouseID, itemID uint) (int, error) {
+func (s *inventoryService) GetBalance(warehouseID, itemID uint) (decimal.Decimal, error) {
 	b, err := s.balanceRepo.GetBalance(warehouseID, itemID)
 	if err != nil {
-		return 0, err
+		return decimal.Zero, err
 	}
 	if b == nil {
-		return 0, nil
+		return decimal.Zero, nil
 	}
 	return b.Quantity, nil
 }
@@ -115,10 +116,10 @@ func (s *inventoryService) processIncomeWithTx(tx *gorm.DB, doc *stock.Document)
 			bal = &stock.StockBalance{
 				WarehouseID: *doc.WarehouseID,
 				ItemID:      it.ItemID,
-				Quantity:    0,
+				Quantity:    decimal.Zero,
 			}
 		}
-		bal.Quantity += it.Quantity
+		bal.Quantity = bal.Quantity.Add(it.Quantity)
 		if err := s.balanceRepo.SaveBalanceWithTx(tx, bal); err != nil {
 			return err
 		}
@@ -135,12 +136,12 @@ func (s *inventoryService) processOutcomeWithTx(tx *gorm.DB, doc *stock.Document
 		if err != nil {
 			return err
 		}
-		cur := 0
+		cur := decimal.Zero
 		if bal != nil {
 			cur = bal.Quantity
 		}
-		if cur < it.Quantity {
-			return fmt.Errorf("not enough stock for item %d on warehouse %d: have=%d need=%d", it.ItemID, *doc.WarehouseID, cur, it.Quantity)
+		if cur.LessThan(it.Quantity) {
+			return fmt.Errorf("not enough stock for item %d on warehouse %d: have=%s need=%s", it.ItemID, *doc.WarehouseID, cur.String(), it.Quantity.String())
 		}
 
 		mv := &stock.StockMovement{
@@ -148,7 +149,7 @@ func (s *inventoryService) processOutcomeWithTx(tx *gorm.DB, doc *stock.Document
 			ItemID:         it.ItemID,
 			WarehouseID:    *doc.WarehouseID,
 			CounterpartyID: doc.CounterpartyID,
-			Quantity:       -it.Quantity,
+			Quantity:       it.Quantity.Neg(),
 			Type:           "OUTCOME",
 			Comment:        doc.Comment,
 			CreatedAt:      time.Now(),
@@ -157,7 +158,7 @@ func (s *inventoryService) processOutcomeWithTx(tx *gorm.DB, doc *stock.Document
 			return err
 		}
 
-		bal.Quantity -= it.Quantity
+		bal.Quantity = bal.Quantity.Sub(it.Quantity)
 		if err := s.balanceRepo.SaveBalanceWithTx(tx, bal); err != nil {
 			return err
 		}
@@ -177,19 +178,21 @@ func (s *inventoryService) processTransferWithTx(tx *gorm.DB, doc *stock.Documen
 		if err != nil {
 			return err
 		}
-		cur := 0
+
+		cur := decimal.Zero
 		if balFrom != nil {
 			cur = balFrom.Quantity
 		}
-		if cur < it.Quantity {
-			return fmt.Errorf("not enough stock for transfer item %d: have=%d need=%d", it.ItemID, cur, it.Quantity)
+
+		if cur.LessThan(it.Quantity) {
+			return fmt.Errorf("not enough stock for transfer item %d: have=%s need=%s", it.ItemID, cur.String(), it.Quantity.String())
 		}
 
 		mvOut := &stock.StockMovement{
 			DocumentID:  &doc.ID,
 			ItemID:      it.ItemID,
 			WarehouseID: from,
-			Quantity:    -it.Quantity,
+			Quantity:    it.Quantity.Neg(),
 			Type:        "TRANSFER",
 			Comment:     "transfer out: " + doc.Comment,
 			CreatedAt:   time.Now(),
@@ -211,10 +214,7 @@ func (s *inventoryService) processTransferWithTx(tx *gorm.DB, doc *stock.Documen
 			return err
 		}
 
-		if balFrom == nil {
-			balFrom = &stock.StockBalance{WarehouseID: from, ItemID: it.ItemID, Quantity: 0}
-		}
-		balFrom.Quantity -= it.Quantity
+		balFrom.Quantity = balFrom.Quantity.Sub(it.Quantity)
 		if err := s.balanceRepo.SaveBalanceWithTx(tx, balFrom); err != nil {
 			return err
 		}
@@ -224,9 +224,9 @@ func (s *inventoryService) processTransferWithTx(tx *gorm.DB, doc *stock.Documen
 			return err
 		}
 		if balTo == nil {
-			balTo = &stock.StockBalance{WarehouseID: to, ItemID: it.ItemID, Quantity: 0}
+			balTo = &stock.StockBalance{WarehouseID: to, ItemID: it.ItemID, Quantity: decimal.Zero}
 		}
-		balTo.Quantity += it.Quantity
+		balTo.Quantity = balTo.Quantity.Add(it.Quantity)
 		if err := s.balanceRepo.SaveBalanceWithTx(tx, balTo); err != nil {
 			return err
 		}
@@ -239,11 +239,25 @@ func (s *inventoryService) processInventoryWithTx(tx *gorm.DB, doc *stock.Docume
 		return errors.New("warehouse_id required for inventory")
 	}
 	for _, it := range doc.Items {
+		bal, err := s.balanceRepo.GetBalanceWithTx(tx, *doc.WarehouseID, it.ItemID)
+		if err != nil {
+			return err
+		}
+		if bal == nil {
+			bal = &stock.StockBalance{
+				WarehouseID: *doc.WarehouseID,
+				ItemID:      it.ItemID,
+			}
+		}
+
+		currentQty := bal.Quantity
+		movementQty := it.Quantity.Sub(currentQty)
+
 		mv := &stock.StockMovement{
 			DocumentID:  &doc.ID,
 			ItemID:      it.ItemID,
 			WarehouseID: *doc.WarehouseID,
-			Quantity:    it.Quantity,
+			Quantity:    movementQty,
 			Type:        "INVENTORY",
 			Comment:     doc.Comment,
 			CreatedAt:   time.Now(),
@@ -252,11 +266,7 @@ func (s *inventoryService) processInventoryWithTx(tx *gorm.DB, doc *stock.Docume
 			return err
 		}
 
-		bal := &stock.StockBalance{
-			WarehouseID: *doc.WarehouseID,
-			ItemID:      it.ItemID,
-			Quantity:    it.Quantity,
-		}
+		bal.Quantity = it.Quantity
 		if err := s.balanceRepo.SaveBalanceWithTx(tx, bal); err != nil {
 			return err
 		}
@@ -282,7 +292,7 @@ func (s *inventoryService) RevertDocumentWithTx(tx *gorm.DB, doc *stock.Document
 			DocumentID:  &doc.ID,
 			ItemID:      mv.ItemID,
 			WarehouseID: mv.WarehouseID,
-			Quantity:    -mv.Quantity,
+			Quantity:    mv.Quantity.Neg(),
 			Type:        "CANCEL",
 			Comment:     "cancel of doc " + doc.Number,
 			CreatedAt:   time.Now(),
@@ -296,9 +306,9 @@ func (s *inventoryService) RevertDocumentWithTx(tx *gorm.DB, doc *stock.Document
 			return err
 		}
 		if bal == nil {
-			bal = &stock.StockBalance{WarehouseID: mv.WarehouseID, ItemID: mv.ItemID, Quantity: 0}
+			bal = &stock.StockBalance{WarehouseID: mv.WarehouseID, ItemID: mv.ItemID, Quantity: decimal.Zero}
 		}
-		bal.Quantity -= mv.Quantity
+		bal.Quantity = bal.Quantity.Sub(mv.Quantity)
 		if err := s.balanceRepo.SaveBalanceWithTx(tx, bal); err != nil {
 			return err
 		}

@@ -14,6 +14,7 @@ type DocumentRepository interface {
 
 	GetByID(id uint) (*stock.Document, error)
 	GetByNumber(number string) (*stock.Document, error)
+	ListByStatus(status string) ([]stock.Document, error)
 
 	UpdateWithTx(tx *gorm.DB, doc *stock.Document) (*stock.Document, error)
 	CreateWithTx(tx *gorm.DB, doc *stock.Document) (*stock.Document, error)
@@ -61,6 +62,14 @@ func (r *documentRepo) GetByNumber(number string) (*stock.Document, error) {
 		return nil, err
 	}
 	return &d, nil
+}
+
+func (r *documentRepo) ListByStatus(status string) ([]stock.Document, error) {
+	var docs []stock.Document
+	if err := r.db.Preload("Items").Where("status = ?", status).Find(&docs).Error; err != nil {
+		return nil, err
+	}
+	return docs, nil
 }
 
 func (r *documentRepo) List() ([]stock.Document, error) {

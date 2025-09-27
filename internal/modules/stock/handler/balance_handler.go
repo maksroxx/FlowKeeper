@@ -5,6 +5,8 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
+
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/service"
 )
@@ -42,10 +44,14 @@ func (h *BalanceHandler) GetByWarehouse(c *gin.Context) {
 	if sku := c.Query("sku"); sku != "" {
 		filter.SKU = &sku
 	}
+
 	if minQtyStr := c.Query("min_qty"); minQtyStr != "" {
-		minQty, err := strconv.Atoi(minQtyStr)
+		minQty, err := decimal.NewFromString(minQtyStr)
 		if err == nil {
 			filter.MinQty = &minQty
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid min_qty format"})
+			return
 		}
 	}
 

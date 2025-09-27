@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type Item struct {
 	ID         uint   `gorm:"primaryKey"`
@@ -8,7 +12,6 @@ type Item struct {
 	SKU        string `gorm:"unique"`
 	UnitID     uint
 	CategoryID uint
-	Price      float64
 }
 
 type DocumentHistory struct {
@@ -41,14 +44,14 @@ type Counterparty struct {
 	Name string `gorm:"unique;not null"`
 }
 
-// Document + items
 type Document struct {
 	ID             uint   `gorm:"primaryKey"`
-	Type           string // INCOME, OUTCOME, TRANSFER, INVENTORY
+	Type           string // INCOME, OUTCOME, TRANSFER, INVENTORY, PRICE_UPDATE
 	Number         string `gorm:"uniqueIndex"`
 	WarehouseID    *uint
 	ToWarehouseID  *uint
 	CounterpartyID *uint
+	PriceTypeID    *uint
 	Comment        string
 	Items          []DocumentItem `gorm:"foreignKey:DocumentID;constraint:OnDelete:CASCADE"`
 	Status         string         `gorm:"default:draft"` // draft|posted|canceled
@@ -61,38 +64,50 @@ type DocumentItem struct {
 	ID         uint `gorm:"primaryKey"`
 	DocumentID uint
 	ItemID     uint
-	Quantity   int
+	Quantity   decimal.Decimal `gorm:"type:decimal(14,4);"`
+	Price      *float64
 }
 
-// StockMovement: теперь с DocumentID
 type StockMovement struct {
 	ID             uint  `gorm:"primaryKey"`
 	DocumentID     *uint `gorm:"index"`
 	ItemID         uint
 	WarehouseID    uint
 	CounterpartyID *uint
-	Quantity       int    // signed: + for in, - for out
-	Type           string // income/outcome/transfer/inventory/cancel
+	Quantity       decimal.Decimal `gorm:"type:decimal(14,4);"`
+	Type           string          // income/outcome/transfer/inventory/cancel
 	Comment        string
 	CreatedAt      time.Time
 }
 
-// StockBalance
 type StockBalance struct {
-	ID          uint `gorm:"primaryKey"`
-	WarehouseID uint `gorm:"index:idx_wh_item,unique"`
-	ItemID      uint `gorm:"index:idx_wh_item,unique"`
-	Quantity    int
+	ID          uint            `gorm:"primaryKey"`
+	WarehouseID uint            `gorm:"index:idx_wh_item,unique"`
+	ItemID      uint            `gorm:"index:idx_wh_item,unique"`
+	Quantity    decimal.Decimal `gorm:"type:decimal(14,4);"`
 }
 
 type StockFilter struct {
 	CategoryID *uint
 	SKU        *string
-	MinQty     *int
+	MinQty     *decimal.Decimal
 }
 
 type DocumentSequence struct {
-	// ID будет составным, например "INCOME_2025"
 	ID         string `gorm:"primaryKey"`
 	LastNumber uint
+}
+
+type PriceType struct {
+	ID   uint   `gorm:"primaryKey"`
+	Name string `gorm:"unique;not null"`
+}
+
+type ItemPrice struct {
+	ItemID      uint `gorm:"primaryKey"`
+	PriceTypeID uint `gorm:"primaryKey"`
+
+	Price     float64
+	Currency  string `gorm:"default:'RUB'"`
+	UpdatedAt time.Time
 }

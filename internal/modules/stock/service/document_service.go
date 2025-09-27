@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -15,6 +16,7 @@ type DocumentService interface {
 	Create(doc *stock.Document) (*stock.Document, error)
 	List() ([]stock.Document, error)
 	GetByID(id uint) (*stock.Document, error)
+	ListByStatus(status string) ([]stock.Document, error)
 	Update(doc *stock.Document) (*stock.Document, error)
 	Delete(id uint) error
 
@@ -23,20 +25,22 @@ type DocumentService interface {
 }
 
 type documentService struct {
-	repo        repository.DocumentRepository
-	historyRepo repository.DocumentHistoryRepository
-	inventory   InventoryService
-	sequenceSvc SequenceService
-	tx          repository.TxManager
+	repo         repository.DocumentRepository
+	historyRepo  repository.DocumentHistoryRepository
+	inventory    InventoryService
+	tx           repository.TxManager
+	sequenceSvc  SequenceService
+	priceService PriceService
 }
 
-func NewDocumentService(r repository.DocumentRepository, h repository.DocumentHistoryRepository, inv InventoryService, tx repository.TxManager, seq SequenceService) DocumentService {
+func NewDocumentService(r repository.DocumentRepository, h repository.DocumentHistoryRepository, inv InventoryService, tx repository.TxManager, seq SequenceService, priceSvc PriceService) DocumentService {
 	return &documentService{
-		repo:        r,
-		historyRepo: h,
-		inventory:   inv,
-		tx:          tx,
-		sequenceSvc: seq,
+		repo:         r,
+		historyRepo:  h,
+		inventory:    inv,
+		tx:           tx,
+		sequenceSvc:  seq,
+		priceService: priceSvc,
 	}
 }
 
@@ -44,11 +48,13 @@ func (s *documentService) Create(doc *stock.Document) (*stock.Document, error) {
 	if doc.Status == "" {
 		doc.Status = "draft"
 	}
+
 	newNumber, err := s.sequenceSvc.GenerateNextDocumentNumber(doc.Type)
 	if err != nil {
 		return nil, fmt.Errorf("could not generate document number: %w", err)
 	}
 	doc.Number = newNumber
+
 	return s.repo.Create(doc)
 }
 
@@ -58,6 +64,10 @@ func (s *documentService) List() ([]stock.Document, error) {
 
 func (s *documentService) GetByID(id uint) (*stock.Document, error) {
 	return s.repo.GetByID(id)
+}
+
+func (s *documentService) ListByStatus(status string) ([]stock.Document, error) {
+	return s.repo.ListByStatus(status)
 }
 
 func (s *documentService) Update(doc *stock.Document) (*stock.Document, error) {
@@ -84,8 +94,17 @@ func (s *documentService) Post(id uint) error {
 			return errors.New("cannot post canceled document")
 		}
 
-		if err := s.inventory.ProcessDocumentWithTx(tx, doc); err != nil {
-			return err
+		switch strings.ToUpper(doc.Type) {
+		case "INCOME", "OUTCOME", "TRANSFER", "INVENTORY":
+			if err := s.inventory.ProcessDocumentWithTx(tx, doc); err != nil {
+				return fmt.Errorf("inventory processing failed: %w", err)
+			}
+		case "PRICE_UPDATE":
+			if err := s.priceService.UpdatePricesFromDocumentWithTx(tx, doc); err != nil {
+				return fmt.Errorf("price update processing failed: %w", err)
+			}
+		default:
+			return fmt.Errorf("unknown document type to post: %s", doc.Type)
 		}
 
 		now := time.Now()
@@ -100,7 +119,6 @@ func (s *documentService) Post(id uint) error {
 			Action:     "posted",
 			CreatedAt:  now,
 			CreatedBy:  doc.CreatedBy,
-			Comment:    doc.Comment,
 		}
 		if err := s.historyRepo.CreateWithTx(tx, h); err != nil {
 			return err
@@ -123,8 +141,15 @@ func (s *documentService) Cancel(id uint) error {
 			return errors.New("only posted documents can be canceled")
 		}
 
-		if err := s.inventory.RevertDocumentWithTx(tx, doc); err != nil {
-			return err
+		switch strings.ToUpper(doc.Type) {
+		case "INCOME", "OUTCOME", "TRANSFER", "INVENTORY":
+			if err := s.inventory.RevertDocumentWithTx(tx, doc); err != nil {
+				return err
+			}
+		case "PRICE_UPDATE":
+			return errors.New("cancellation for PRICE_UPDATE is not yet implemented")
+		default:
+			return fmt.Errorf("unknown document type to cancel: %s", doc.Type)
 		}
 
 		doc.Status = "canceled"
@@ -137,7 +162,6 @@ func (s *documentService) Cancel(id uint) error {
 			Action:     "canceled",
 			CreatedAt:  time.Now(),
 			CreatedBy:  doc.CreatedBy,
-			Comment:    doc.Comment,
 		}
 		if err := s.historyRepo.CreateWithTx(tx, h); err != nil {
 			return err

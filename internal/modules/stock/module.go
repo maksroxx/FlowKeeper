@@ -19,6 +19,7 @@ func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	grp := r.Group("/api/v1/stock")
 
 	// repositories
+	priceTypeRepo := repository.NewPriceTypeRepository(db)
 	catRepo := repository.NewCategoryRepository(db)
 	cpRepo := repository.NewCounterpartyRepository(db)
 	docRepo := repository.NewDocumentRepository(db)
@@ -30,19 +31,24 @@ func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	historyRepo := repository.NewDocumentHistoryRepository(db)
 	txManager := repository.NewTxManager(db)
 	seqRepo := repository.NewSequenceRepository()
+	priceRepo := repository.NewPriceRepository(db)
 
 	// services
+	priceTypeSvc := service.NewPriceTypeService(priceTypeRepo)
+	priceSvc := service.NewPriceService(priceRepo)
 	seqSvc := service.NewSequenceService(seqRepo, txManager)
 	catSvc := service.NewCategoryService(catRepo)
 	cpSvc := service.NewCounterpartyService(cpRepo)
 	inventorySvc := service.NewInventoryService(balanceRepo, movRepo, txManager)
-	docSvc := service.NewDocumentService(docRepo, historyRepo, inventorySvc, txManager, seqSvc)
+	docSvc := service.NewDocumentService(docRepo, historyRepo, inventorySvc, txManager, seqSvc, priceSvc)
 	itemSvc := service.NewItemService(itemRepo)
 	movSvc := service.NewStockMovementService(movRepo)
 	unitSvc := service.NewUnitService(unitRepo)
 	whSvc := service.NewWarehouseService(whRepo)
 
 	// handlers
+	handler.NewPriceTypeHandler(priceTypeSvc).Register(grp)
+	handler.NewPriceHandler(priceSvc).Register(grp)
 	handler.NewCategoryHandler(catSvc).Register(grp)
 	handler.NewCounterpartyHandler(cpSvc).Register(grp)
 	handler.NewDocumentHandler(docSvc).Register(grp)
@@ -60,6 +66,8 @@ func (m *Module) Migrate(db *gorm.DB) error {
 		&stock.Document{},
 		&stock.DocumentItem{},
 		&stock.Item{},
+		&stock.ItemPrice{},
+		&stock.PriceType{},
 		&stock.StockMovement{},
 		&stock.Unit{},
 		&stock.Warehouse{},
