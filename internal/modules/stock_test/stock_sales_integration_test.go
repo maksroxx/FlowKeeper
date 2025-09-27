@@ -100,7 +100,6 @@ func TestSalesLifecycle_Integration(t *testing.T) {
 
 	saleDocPayload := models.Document{
 		Type:           "OUTCOME",
-		Number:         "TEST-SALE-001",
 		WarehouseID:    &warehouse.ID,
 		CounterpartyID: &customer.ID,
 		Items:          []models.DocumentItem{{ItemID: item.ID, Quantity: 5}},

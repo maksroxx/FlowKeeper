@@ -90,3 +90,9 @@ type StockFilter struct {
 	SKU        *string
 	MinQty     *int
 }
+
+type DocumentSequence struct {
+	// ID будет составным, например "INCOME_2025"
+	ID         string `gorm:"primaryKey"`
+	LastNumber uint
+}

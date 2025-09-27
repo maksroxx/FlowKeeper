@@ -99,7 +99,6 @@ func TestDocumentLifecycle_Integration(t *testing.T) {
 	// Создаем документ "Приход"
 	docPayload := models.Document{
 		Type:        "INCOME",
-		Number:      "IN-001",
 		WarehouseID: &createdWarehouse.ID,
 		Comment:     "Первая поставка",
 		Items: []models.DocumentItem{

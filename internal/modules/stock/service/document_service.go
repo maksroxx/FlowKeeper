@@ -26,15 +26,17 @@ type documentService struct {
 	repo        repository.DocumentRepository
 	historyRepo repository.DocumentHistoryRepository
 	inventory   InventoryService
+	sequenceSvc SequenceService
 	tx          repository.TxManager
 }
 
-func NewDocumentService(r repository.DocumentRepository, h repository.DocumentHistoryRepository, inv InventoryService, tx repository.TxManager) DocumentService {
+func NewDocumentService(r repository.DocumentRepository, h repository.DocumentHistoryRepository, inv InventoryService, tx repository.TxManager, seq SequenceService) DocumentService {
 	return &documentService{
 		repo:        r,
 		historyRepo: h,
 		inventory:   inv,
 		tx:          tx,
+		sequenceSvc: seq,
 	}
 }
 
@@ -42,12 +44,11 @@ func (s *documentService) Create(doc *stock.Document) (*stock.Document, error) {
 	if doc.Status == "" {
 		doc.Status = "draft"
 	}
-	if doc.Number != "" {
-		existing, _ := s.repo.GetByNumber(doc.Number)
-		if existing != nil {
-			return nil, fmt.Errorf("document with number %s already exists", doc.Number)
-		}
+	newNumber, err := s.sequenceSvc.GenerateNextDocumentNumber(doc.Type)
+	if err != nil {
+		return nil, fmt.Errorf("could not generate document number: %w", err)
 	}
+	doc.Number = newNumber
 	return s.repo.Create(doc)
 }
 

@@ -29,12 +29,14 @@ func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	balanceRepo := repository.NewBalanceRepository(db)
 	historyRepo := repository.NewDocumentHistoryRepository(db)
 	txManager := repository.NewTxManager(db)
+	seqRepo := repository.NewSequenceRepository()
 
 	// services
+	seqSvc := service.NewSequenceService(seqRepo, txManager)
 	catSvc := service.NewCategoryService(catRepo)
 	cpSvc := service.NewCounterpartyService(cpRepo)
 	inventorySvc := service.NewInventoryService(balanceRepo, movRepo, txManager)
-	docSvc := service.NewDocumentService(docRepo, historyRepo, inventorySvc, txManager)
+	docSvc := service.NewDocumentService(docRepo, historyRepo, inventorySvc, txManager, seqSvc)
 	itemSvc := service.NewItemService(itemRepo)
 	movSvc := service.NewStockMovementService(movRepo)
 	unitSvc := service.NewUnitService(unitRepo)
@@ -63,5 +65,6 @@ func (m *Module) Migrate(db *gorm.DB) error {
 		&stock.Warehouse{},
 		&stock.StockBalance{},
 		&stock.DocumentHistory{},
+		&stock.DocumentSequence{},
 	)
 }
