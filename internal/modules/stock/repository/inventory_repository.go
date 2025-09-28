@@ -7,10 +7,7 @@ import (
 )
 
 type BalanceRepository interface {
-	GetBalance(warehouseID, itemID uint) (*stock.StockBalance, error)
-	GetBalanceWithTx(tx *gorm.DB, warehouseID, itemID uint) (*stock.StockBalance, error)
-
-	SaveBalance(b *stock.StockBalance) error
+	GetBalanceWithTx(tx *gorm.DB, warehouseID, variantID uint) (*stock.StockBalance, error)
 	SaveBalanceWithTx(tx *gorm.DB, b *stock.StockBalance) error
 
 	ListByWarehouse(warehouseID uint) ([]stock.StockBalance, error)
@@ -21,29 +18,23 @@ type balanceRepo struct {
 	db *gorm.DB
 }
 
-func NewBalanceRepository(db *gorm.DB) BalanceRepository { return &balanceRepo{db: db} }
-
-func (r *balanceRepo) GetBalance(warehouseID, itemID uint) (*stock.StockBalance, error) {
-	return r.GetBalanceWithTx(nil, warehouseID, itemID)
+func NewBalanceRepository(db *gorm.DB) BalanceRepository {
+	return &balanceRepo{db: db}
 }
 
-func (r *balanceRepo) GetBalanceWithTx(tx *gorm.DB, warehouseID, itemID uint) (*stock.StockBalance, error) {
+func (r *balanceRepo) GetBalanceWithTx(tx *gorm.DB, warehouseID, variantID uint) (*stock.StockBalance, error) {
 	db := r.db
 	if tx != nil {
 		db = tx
 	}
 	var b stock.StockBalance
-	if err := db.Where("warehouse_id = ? AND item_id = ?", warehouseID, itemID).First(&b).Error; err != nil {
+	if err := db.Where("warehouse_id = ? AND item_id = ?", warehouseID, variantID).First(&b).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
 		return nil, err
 	}
 	return &b, nil
-}
-
-func (r *balanceRepo) SaveBalance(b *stock.StockBalance) error {
-	return r.SaveBalanceWithTx(nil, b)
 }
 
 func (r *balanceRepo) SaveBalanceWithTx(tx *gorm.DB, b *stock.StockBalance) error {
@@ -73,13 +64,15 @@ func (r *balanceRepo) ListByWarehouseFiltered(warehouseID uint, f stock.StockFil
 	}
 
 	if f.SKU != nil || f.CategoryID != nil {
-		query = query.Joins("JOIN items ON items.id = stock_balances.item_id")
+		query = query.Joins("JOIN variants ON variants.id = stock_balances.item_id")
 
 		if f.SKU != nil {
-			query = query.Where("items.sku = ?", *f.SKU)
+			query = query.Where("variants.sku = ?", *f.SKU)
 		}
+
 		if f.CategoryID != nil {
-			query = query.Where("items.category_id = ?", *f.CategoryID)
+			query = query.Joins("JOIN products ON products.id = variants.product_id").
+				Where("products.category_id = ?", *f.CategoryID)
 		}
 	}
 

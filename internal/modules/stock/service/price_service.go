@@ -37,11 +37,11 @@ func (s *priceService) UpdatePricesFromDocumentWithTx(tx *gorm.DB, doc *models.D
 	var pricesToUpdate []models.ItemPrice
 	for _, item := range doc.Items {
 		if item.Price == nil {
-			return fmt.Errorf("price is not set for item ID %d in document", item.ItemID)
+			return fmt.Errorf("price is not set for item ID %d in document", item.VariantID)
 		}
 
 		priceRecord := models.ItemPrice{
-			ItemID:      item.ItemID,
+			VariantID:   item.VariantID,
 			PriceTypeID: *doc.PriceTypeID,
 			Price:       *item.Price,
 			Currency:    "RUB",

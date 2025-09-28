@@ -9,16 +9,16 @@ import (
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/service"
 )
 
-type ItemHandler struct {
-	service service.ItemService
+type VariantHandler struct {
+	service service.VariantService
 }
 
-func NewItemHandler(s service.ItemService) *ItemHandler {
-	return &ItemHandler{service: s}
+func NewVariantHandler(s service.VariantService) *VariantHandler {
+	return &VariantHandler{service: s}
 }
 
-func (h *ItemHandler) Register(r *gin.RouterGroup) {
-	grp := r.Group("/items")
+func (h *VariantHandler) Register(r *gin.RouterGroup) {
+	grp := r.Group("/variants")
 	{
 		grp.POST("", h.Create)
 		grp.GET("", h.List)
@@ -28,72 +28,58 @@ func (h *ItemHandler) Register(r *gin.RouterGroup) {
 	}
 }
 
-func (h *ItemHandler) Create(c *gin.Context) {
-	var item models.Item
-	if err := c.ShouldBindJSON(&item); err != nil {
+func (h *VariantHandler) Create(c *gin.Context) {
+	var v models.Variant
+	if err := c.ShouldBindJSON(&v); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	createdItem, err := h.service.Create(item.Name, item.SKU, item.UnitID, item.CategoryID)
+	created, err := h.service.Create(&v)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, createdItem)
+	c.JSON(http.StatusCreated, created)
 }
 
-func (h *ItemHandler) List(c *gin.Context) {
-	items, err := h.service.List()
+func (h *VariantHandler) List(c *gin.Context) {
+	list, err := h.service.List()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, items)
+	c.JSON(http.StatusOK, list)
 }
 
-func (h *ItemHandler) GetByID(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+func (h *VariantHandler) GetByID(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	v, err := h.service.GetByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Variant not found"})
 		return
 	}
-	item, err := h.service.GetByID(uint(id))
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Item not found"})
-		return
-	}
-	c.JSON(http.StatusOK, item)
+	c.JSON(http.StatusOK, v)
 }
 
-func (h *ItemHandler) Update(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
-		return
-	}
-
-	var item models.Item
-	if err := c.ShouldBindJSON(&item); err != nil {
+func (h *VariantHandler) Update(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var v models.Variant
+	if err := c.ShouldBindJSON(&v); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	item.ID = uint(id)
-
-	updatedItem, err := h.service.Update(&item)
+	v.ID = uint(id)
+	updated, err := h.service.Update(&v)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, updatedItem)
+	c.JSON(http.StatusOK, updated)
 }
 
-func (h *ItemHandler) Delete(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
-		return
-	}
+func (h *VariantHandler) Delete(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := h.service.Delete(uint(id)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

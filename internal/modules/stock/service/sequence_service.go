@@ -46,6 +46,10 @@ func (s *sequenceService) GenerateNextDocumentNumber(docType string) (string, er
 			prefix = "ПМ"
 		case "INVENTORY":
 			prefix = "ИН"
+		case "PRICE_UPDATE":
+			prefix = "УЦ"
+		case "ORDER":
+			prefix = "ЗК"
 		default:
 			prefix = "ДОК"
 		}

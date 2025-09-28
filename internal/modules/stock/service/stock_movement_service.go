@@ -26,7 +26,7 @@ func NewStockMovementService(r repository.StockMovementRepository) StockMovement
 
 func (s *movementService) Create(itemID, warehouseID uint, counterpartyID *uint, qty decimal.Decimal, mtype, comment string) (*stock.StockMovement, error) {
 	return s.repo.Create(&stock.StockMovement{
-		ItemID:         itemID,
+		VariantID:      itemID,
 		WarehouseID:    warehouseID,
 		CounterpartyID: counterpartyID,
 		Quantity:       qty,

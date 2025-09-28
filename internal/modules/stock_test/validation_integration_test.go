@@ -18,7 +18,7 @@ func TestBalances_Integration(t *testing.T) {
 	warehouse := h.CreateWarehouse("Главный склад")
 	unit := h.CreateUnit("кг")
 	category := h.CreateCategory("Фрукты")
-	item := h.CreateItem(gin.H{"name": "Яблоки", "sku": "APL-GR", "unit_id": unit.ID, "category_id": category.ID})
+	item := h.CreateVariant(gin.H{"name": "Яблоки", "sku": "APL-GR", "unit_id": unit.ID, "category_id": category.ID})
 
 	incomeQty := decimal.NewFromFloat(100.5)
 	incomePrice := decimal.NewFromFloat(50.0)
@@ -29,7 +29,7 @@ func TestBalances_Integration(t *testing.T) {
 	incomeDoc := h.CreateDocument(models.Document{
 		Type:        "INCOME",
 		WarehouseID: &warehouse.ID,
-		Items:       []models.DocumentItem{{ItemID: item.ID, Quantity: incomeQty, Price: decimalPtr(incomePrice)}},
+		Items:       []models.DocumentItem{{VariantID: item.ID, Quantity: incomeQty, Price: decimalPtr(incomePrice)}},
 	})
 	h.PostDocument(incomeDoc.ID)
 
@@ -41,7 +41,7 @@ func TestBalances_Integration(t *testing.T) {
 	outcomeDoc := h.CreateDocument(models.Document{
 		Type:        "OUTCOME",
 		WarehouseID: &warehouse.ID,
-		Items:       []models.DocumentItem{{ItemID: item.ID, Quantity: outcomeQty}},
+		Items:       []models.DocumentItem{{VariantID: item.ID, Quantity: outcomeQty}},
 	})
 	h.PostDocument(outcomeDoc.ID)
 

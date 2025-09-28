@@ -2,6 +2,7 @@ package repository
 
 import (
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	stock "github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 )
@@ -18,6 +19,7 @@ type DocumentRepository interface {
 
 	UpdateWithTx(tx *gorm.DB, doc *stock.Document) (*stock.Document, error)
 	CreateWithTx(tx *gorm.DB, doc *stock.Document) (*stock.Document, error)
+	GetByIDWithTx(tx *gorm.DB, id uint) (*stock.Document, error)
 }
 
 type documentRepo struct {
@@ -43,6 +45,22 @@ func (r *documentRepo) CreateWithTx(tx *gorm.DB, doc *stock.Document) (*stock.Do
 		return nil, err
 	}
 	return doc, nil
+}
+
+func (r *documentRepo) GetByIDWithTx(tx *gorm.DB, id uint) (*stock.Document, error) {
+	var d stock.Document
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+	err := db.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Preload("Items").
+		First(&d, id).Error
+
+	if err != nil {
+		return nil, err
+	}
+	return &d, nil
 }
 
 func (r *documentRepo) GetByID(id uint) (*stock.Document, error) {

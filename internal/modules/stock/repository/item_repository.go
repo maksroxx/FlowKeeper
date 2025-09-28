@@ -1,46 +1,48 @@
 package repository
 
 import (
-	stock "github.com/maksroxx/flowkeeper/internal/modules/stock/models"
+	"github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 	"gorm.io/gorm"
 )
 
-type ItemRepository interface {
-	Create(i *stock.Item) (*stock.Item, error)
-	GetByID(id uint) (*stock.Item, error)
-	List() ([]stock.Item, error)
-	Update(i *stock.Item) (*stock.Item, error)
+type VariantRepository interface {
+	Create(v *models.Variant) (*models.Variant, error)
+	GetByID(id uint) (*models.Variant, error)
+	List() ([]models.Variant, error)
+	Update(v *models.Variant) (*models.Variant, error)
 	Delete(id uint) error
 }
 
-type itemRepo struct{ db *gorm.DB }
+type variantRepo struct{ db *gorm.DB }
 
-func NewItemRepository(db *gorm.DB) ItemRepository { return &itemRepo{db: db} }
-
-func (r *itemRepo) Create(i *stock.Item) (*stock.Item, error) {
-	err := r.db.Create(i).Error
-	return i, err
+func NewVariantRepository(db *gorm.DB) VariantRepository {
+	return &variantRepo{db: db}
 }
 
-func (r *itemRepo) GetByID(id uint) (*stock.Item, error) {
-	var item stock.Item
-	if err := r.db.First(&item, id).Error; err != nil {
+func (r *variantRepo) Create(v *models.Variant) (*models.Variant, error) {
+	err := r.db.Create(v).Error
+	return v, err
+}
+
+func (r *variantRepo) GetByID(id uint) (*models.Variant, error) {
+	var variant models.Variant
+	if err := r.db.First(&variant, id).Error; err != nil {
 		return nil, err
 	}
-	return &item, nil
+	return &variant, nil
 }
 
-func (r *itemRepo) List() ([]stock.Item, error) {
-	var items []stock.Item
-	err := r.db.Find(&items).Error
-	return items, err
+func (r *variantRepo) List() ([]models.Variant, error) {
+	var variants []models.Variant
+	err := r.db.Find(&variants).Error
+	return variants, err
 }
 
-func (r *itemRepo) Update(i *stock.Item) (*stock.Item, error) {
-	err := r.db.Save(i).Error
-	return i, err
+func (r *variantRepo) Update(v *models.Variant) (*models.Variant, error) {
+	err := r.db.Save(v).Error
+	return v, err
 }
 
-func (r *itemRepo) Delete(id uint) error {
-	return r.db.Delete(&stock.Item{}, id).Error
+func (r *variantRepo) Delete(id uint) error {
+	return r.db.Delete(&models.Variant{}, id).Error
 }
