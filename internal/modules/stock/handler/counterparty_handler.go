@@ -35,7 +35,7 @@ func (h *CounterpartyHandler) Create(c *gin.Context) {
 		return
 	}
 
-	createdCounterparty, err := h.service.Create(cp.Name)
+	createdCounterparty, err := h.service.Create(&cp)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

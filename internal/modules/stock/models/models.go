@@ -14,15 +14,6 @@ type Item struct {
 	CategoryID uint
 }
 
-type DocumentHistory struct {
-	ID         uint `gorm:"primaryKey"`
-	DocumentID uint
-	Action     string // "posted", "canceled"
-	CreatedAt  time.Time
-	CreatedBy  *uint
-	Comment    string
-}
-
 type Category struct {
 	ID   uint   `gorm:"primaryKey"`
 	Name string `gorm:"unique;not null"`
@@ -40,8 +31,12 @@ type Warehouse struct {
 }
 
 type Counterparty struct {
-	ID   uint   `gorm:"primaryKey"`
-	Name string `gorm:"unique;not null"`
+	ID       uint   `gorm:"primaryKey"`
+	Name     string `gorm:"unique;not null"`
+	Phone    string `gorm:"size:20"`
+	Telegram string `gorm:"size:100"`
+	Email    string `gorm:"size:255"`
+	Address  string
 }
 
 type Document struct {
@@ -64,8 +59,17 @@ type DocumentItem struct {
 	ID         uint `gorm:"primaryKey"`
 	DocumentID uint
 	ItemID     uint
-	Quantity   decimal.Decimal `gorm:"type:decimal(14,4);"`
-	Price      *float64
+	Quantity   decimal.Decimal  `gorm:"type:decimal(14,4);"`
+	Price      *decimal.Decimal `gorm:"type:decimal(14,2);"`
+}
+
+type DocumentHistory struct {
+	ID         uint `gorm:"primaryKey"`
+	DocumentID uint
+	Action     string // "posted", "canceled"
+	CreatedAt  time.Time
+	CreatedBy  *uint
+	Comment    string
 }
 
 type StockMovement struct {
@@ -75,6 +79,7 @@ type StockMovement struct {
 	WarehouseID    uint
 	CounterpartyID *uint
 	Quantity       decimal.Decimal `gorm:"type:decimal(14,4);"`
+	Cost           decimal.Decimal `gorm:"type:decimal(14,4);"`
 	Type           string          // income/outcome/transfer/inventory/cancel
 	Comment        string
 	CreatedAt      time.Time
@@ -85,6 +90,7 @@ type StockBalance struct {
 	WarehouseID uint            `gorm:"index:idx_wh_item,unique"`
 	ItemID      uint            `gorm:"index:idx_wh_item,unique"`
 	Quantity    decimal.Decimal `gorm:"type:decimal(14,4);"`
+	TotalCost   decimal.Decimal `gorm:"type:decimal(18,4);"`
 }
 
 type StockFilter struct {
@@ -107,7 +113,7 @@ type ItemPrice struct {
 	ItemID      uint `gorm:"primaryKey"`
 	PriceTypeID uint `gorm:"primaryKey"`
 
-	Price     float64
-	Currency  string `gorm:"default:'RUB'"`
+	Price     decimal.Decimal `gorm:"type:decimal(14,2);"`
+	Currency  string          `gorm:"default:'RUB'"`
 	UpdatedAt time.Time
 }

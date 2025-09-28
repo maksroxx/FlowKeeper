@@ -6,7 +6,7 @@ import (
 )
 
 type CounterpartyService interface {
-	Create(name string) (*stock.Counterparty, error)
+	Create(cp *stock.Counterparty) (*stock.Counterparty, error)
 	GetByID(id uint) (*stock.Counterparty, error)
 	List() ([]stock.Counterparty, error)
 	Update(cp *stock.Counterparty) (*stock.Counterparty, error)
@@ -21,8 +21,8 @@ func NewCounterpartyService(r repository.CounterpartyRepository) CounterpartySer
 	return &counterpartyService{repo: r}
 }
 
-func (s *counterpartyService) Create(name string) (*stock.Counterparty, error) {
-	return s.repo.Create(&stock.Counterparty{Name: name})
+func (s *counterpartyService) Create(cp *stock.Counterparty) (*stock.Counterparty, error) {
+	return s.repo.Create(cp)
 }
 func (s *counterpartyService) GetByID(id uint) (*stock.Counterparty, error) {
 	return s.repo.GetByID(id)

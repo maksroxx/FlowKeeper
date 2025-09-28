@@ -1,4 +1,4 @@
-package stock_test
+package stocktest
 
 import (
 	"bytes"
@@ -215,12 +215,21 @@ func (h *TestHelper) CreateUnit(name string) models.Unit {
 }
 
 // CreateCounterparty создает нового контрагента (клиента/поставщика) через API (POST /counterparties).
-func (h *TestHelper) CreateCounterparty(name string) models.Counterparty {
-	w := h.PerformRequest("POST", "/api/v1/stock/counterparties", gin.H{"name": name})
-	h.Assert.Equal(http.StatusCreated, w.Code, "Failed to create counterparty")
+func (h *TestHelper) CreateCounterparty(payload gin.H) models.Counterparty {
+	w := h.PerformRequest("POST", "/api/v1/stock/counterparties", payload)
+	h.Assert.Equal(http.StatusCreated, w.Code, fmt.Sprintf("Failed to create counterparty. Body: %s", w.Body.String()))
 	var created models.Counterparty
 	json.Unmarshal(w.Body.Bytes(), &created)
 	return created
+}
+
+// GetCounterparty возвращает контрагента чурущ API (GET /conterpartirs/:id)
+func (h *TestHelper) GetCounterparty(id uint) models.Counterparty {
+	w := h.PerformRequest("GET", fmt.Sprintf("/api/v1/stock/counterparties/%d", id), nil)
+	h.Assert.Equal(http.StatusOK, w.Code)
+	var cp models.Counterparty
+	json.Unmarshal(w.Body.Bytes(), &cp)
+	return cp
 }
 
 // GetBalances получает все остатки на конкретном складе через API (GET /balances/warehouse/:id).

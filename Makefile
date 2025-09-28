@@ -3,7 +3,7 @@ BIN_DIR=bin
 CONFIG=config/config.yaml
 DB_DIR=data
 
-.PHONY: all build run clean test lint
+.PHONY: all build run clean test lint test
 
 all: build
 
@@ -31,3 +31,6 @@ lint:
 migrate:
 	@echo "Running DB migrations..."
 	@go run ./cmd/migrate
+
+test:
+	@go test -v ./...
