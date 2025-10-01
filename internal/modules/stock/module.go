@@ -1,9 +1,12 @@
 package stock
 
 import (
+	"fmt"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"github.com/maksroxx/flowkeeper/internal/modules/stock/config"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/handler"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/repository"
@@ -18,6 +21,11 @@ func (m *Module) Name() string { return "stock" }
 
 func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	grp := r.Group("/api/v1/stock")
+
+	stockCfg, err := config.LoadStockConfig("./config/stock_config.yml")
+	if err != nil {
+		panic(fmt.Sprintf("failed to load stock module config: %v", err))
+	}
 
 	// --- repositories ---
 	productRepo := repository.NewProductRepository(db)
@@ -36,6 +44,7 @@ func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	seqRepo := repository.NewSequenceRepository()
 	reservRepo := repository.NewReservationRepository(db)
 	txManager := repository.NewTxManager(db)
+	lotRepo := repository.NewLotRepository()
 
 	// --- services ---
 	productSvc := service.NewProductService(productRepo)
@@ -46,7 +55,8 @@ func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	seqSvc := service.NewSequenceService(seqRepo, txManager)
 	catSvc := service.NewCategoryService(catRepo)
 	cpSvc := service.NewCounterpartyService(cpRepo)
-	inventorySvc := service.NewInventoryService(balanceRepo, reservRepo, movRepo)
+	strategyFactory := service.NewStrategyFactory(balanceRepo, movRepo, lotRepo)
+	inventorySvc := service.NewInventoryService(strategyFactory, reservRepo, balanceRepo, stockCfg)
 	docSvc := service.NewDocumentService(docRepo, historyRepo, inventorySvc, priceSvc, seqSvc, txManager)
 	movSvc := service.NewStockMovementService(movRepo)
 	unitSvc := service.NewUnitService(unitRepo)
@@ -74,6 +84,7 @@ func (m *Module) Migrate(db *gorm.DB) error {
 		&models.CharacteristicType{},
 		&models.CharacteristicValue{},
 		&models.StockReservation{},
+		&models.StockLot{},
 
 		&models.Category{},
 		&models.Counterparty{},

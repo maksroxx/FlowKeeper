@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -19,11 +20,13 @@ import (
 )
 
 func setupTestRouter(dbName string) (*gin.Engine, *gorm.DB) {
-	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", dbName)
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	dbPath := fmt.Sprintf("test_%s.db", dbName)
+	os.Remove(dbPath)
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
 		panic(fmt.Sprintf("Failed to connect to database: %v", err))
 	}
+	db.Exec("PRAGMA journal_mode = WAL;")
 
 	stockModule := stock.NewModule()
 	err = stockModule.Migrate(db)
@@ -38,6 +41,7 @@ func setupTestRouter(dbName string) (*gin.Engine, *gorm.DB) {
 	return router, db
 }
 
+// TestHelper - наш помощник для интеграционных тестов.
 type TestHelper struct {
 	T      *testing.T
 	Router *gin.Engine
@@ -48,6 +52,7 @@ func NewTestHelper(t *testing.T, router *gin.Engine) *TestHelper {
 	return &TestHelper{T: t, Router: router, Assert: require.New(t)}
 }
 
+// PerformRequest - низкоуровневый метод для выполнения любого HTTP-запроса.
 func (h *TestHelper) PerformRequest(method, path string, body interface{}) *httptest.ResponseRecorder {
 	var reqBody []byte
 	if body != nil {
@@ -60,16 +65,25 @@ func (h *TestHelper) PerformRequest(method, path string, body interface{}) *http
 	return w
 }
 
-// --- Products ---
+// --- Утилиты ---
+func decimalPtr(d decimal.Decimal) *decimal.Decimal { return &d }
+func findBalance(balances []models.StockBalance, variantID uint) models.StockBalance {
+	for _, b := range balances {
+		if b.VariantID == variantID {
+			return b
+		}
+	}
+	return models.StockBalance{}
+}
 
+// --- Products ---
 func (h *TestHelper) CreateProduct(payload gin.H) models.Product {
 	w := h.PerformRequest("POST", "/api/v1/stock/products", payload)
-	h.Assert.Equal(http.StatusCreated, w.Code, "Failed to create product")
+	h.Assert.Equal(http.StatusCreated, w.Code, fmt.Sprintf("Failed to create product. Body: %s", w.Body.String()))
 	var created models.Product
 	json.Unmarshal(w.Body.Bytes(), &created)
 	return created
 }
-
 func (h *TestHelper) GetProduct(id uint) models.Product {
 	w := h.PerformRequest("GET", fmt.Sprintf("/api/v1/stock/products/%d", id), nil)
 	h.Assert.Equal(http.StatusOK, w.Code)
@@ -77,7 +91,6 @@ func (h *TestHelper) GetProduct(id uint) models.Product {
 	json.Unmarshal(w.Body.Bytes(), &p)
 	return p
 }
-
 func (h *TestHelper) ListProducts() []models.Product {
 	w := h.PerformRequest("GET", "/api/v1/stock/products", nil)
 	h.Assert.Equal(http.StatusOK, w.Code)
@@ -85,7 +98,6 @@ func (h *TestHelper) ListProducts() []models.Product {
 	json.Unmarshal(w.Body.Bytes(), &ps)
 	return ps
 }
-
 func (h *TestHelper) UpdateProduct(id uint, payload gin.H) models.Product {
 	w := h.PerformRequest("PUT", fmt.Sprintf("/api/v1/stock/products/%d", id), payload)
 	h.Assert.Equal(http.StatusOK, w.Code)
@@ -93,14 +105,46 @@ func (h *TestHelper) UpdateProduct(id uint, payload gin.H) models.Product {
 	json.Unmarshal(w.Body.Bytes(), &updated)
 	return updated
 }
-
 func (h *TestHelper) DeleteProduct(id uint) {
 	w := h.PerformRequest("DELETE", fmt.Sprintf("/api/v1/stock/products/%d", id), nil)
 	h.Assert.Equal(http.StatusNoContent, w.Code)
 }
 
-// --- Characteristics ---
+// --- Variants ---
+func (h *TestHelper) CreateVariant(payload gin.H) models.Variant {
+	w := h.PerformRequest("POST", "/api/v1/stock/variants", payload)
+	h.Assert.Equal(http.StatusCreated, w.Code, fmt.Sprintf("Failed to create variant. Body: %s", w.Body.String()))
+	var created models.Variant
+	json.Unmarshal(w.Body.Bytes(), &created)
+	return created
+}
+func (h *TestHelper) GetVariant(id uint) models.Variant {
+	w := h.PerformRequest("GET", fmt.Sprintf("/api/v1/stock/variants/%d", id), nil)
+	h.Assert.Equal(http.StatusOK, w.Code)
+	var v models.Variant
+	json.Unmarshal(w.Body.Bytes(), &v)
+	return v
+}
+func (h *TestHelper) ListVariants() []models.Variant {
+	w := h.PerformRequest("GET", "/api/v1/stock/variants", nil)
+	h.Assert.Equal(http.StatusOK, w.Code)
+	var vs []models.Variant
+	json.Unmarshal(w.Body.Bytes(), &vs)
+	return vs
+}
+func (h *TestHelper) UpdateVariant(id uint, payload gin.H) models.Variant {
+	w := h.PerformRequest("PUT", fmt.Sprintf("/api/v1/stock/variants/%d", id), payload)
+	h.Assert.Equal(http.StatusOK, w.Code)
+	var v models.Variant
+	json.Unmarshal(w.Body.Bytes(), &v)
+	return v
+}
+func (h *TestHelper) DeleteVariant(id uint) {
+	w := h.PerformRequest("DELETE", fmt.Sprintf("/api/v1/stock/variants/%d", id), nil)
+	h.Assert.Equal(http.StatusNoContent, w.Code)
+}
 
+// --- Characteristics ---
 func (h *TestHelper) CreateCharacteristicType(payload gin.H) models.CharacteristicType {
 	w := h.PerformRequest("POST", "/api/v1/stock/characteristics/types", payload)
 	h.Assert.Equal(http.StatusCreated, w.Code)
@@ -108,15 +152,6 @@ func (h *TestHelper) CreateCharacteristicType(payload gin.H) models.Characterist
 	json.Unmarshal(w.Body.Bytes(), &created)
 	return created
 }
-
-func (h *TestHelper) ListCharacteristicTypes() []models.CharacteristicType {
-	w := h.PerformRequest("GET", "/api/v1/stock/characteristics/types", nil)
-	h.Assert.Equal(http.StatusOK, w.Code)
-	var list []models.CharacteristicType
-	json.Unmarshal(w.Body.Bytes(), &list)
-	return list
-}
-
 func (h *TestHelper) CreateCharacteristicValue(payload gin.H) models.CharacteristicValue {
 	w := h.PerformRequest("POST", "/api/v1/stock/characteristics/values", payload)
 	h.Assert.Equal(http.StatusCreated, w.Code)
@@ -125,42 +160,7 @@ func (h *TestHelper) CreateCharacteristicValue(payload gin.H) models.Characteris
 	return created
 }
 
-func (h *TestHelper) ListCharacteristicValues() []models.CharacteristicValue {
-	w := h.PerformRequest("GET", "/api/v1/stock/characteristics/values", nil)
-	h.Assert.Equal(http.StatusOK, w.Code)
-	var list []models.CharacteristicValue
-	json.Unmarshal(w.Body.Bytes(), &list)
-	return list
-}
-
-// --- Variants ---
-
-func (h *TestHelper) CreateVariant(payload gin.H) models.Variant {
-	w := h.PerformRequest("POST", "/api/v1/stock/variants", payload)
-	h.Assert.Equal(http.StatusCreated, w.Code)
-	var created models.Variant
-	json.Unmarshal(w.Body.Bytes(), &created)
-	return created
-}
-
-func (h *TestHelper) GetVariant(id uint) models.Variant {
-	w := h.PerformRequest("GET", fmt.Sprintf("/api/v1/stock/variants/%d", id), nil)
-	h.Assert.Equal(http.StatusOK, w.Code)
-	var v models.Variant
-	json.Unmarshal(w.Body.Bytes(), &v)
-	return v
-}
-
-func (h *TestHelper) ListVariants() []models.Variant {
-	w := h.PerformRequest("GET", "/api/v1/stock/variants", nil)
-	h.Assert.Equal(http.StatusOK, w.Code)
-	var vs []models.Variant
-	json.Unmarshal(w.Body.Bytes(), &vs)
-	return vs
-}
-
-// --- PriceTypes ---
-
+// --- PriceTypes & Prices ---
 func (h *TestHelper) CreatePriceType(name string) models.PriceType {
 	w := h.PerformRequest("POST", "/api/v1/stock/price-types", gin.H{"name": name})
 	h.Assert.Equal(http.StatusCreated, w.Code)
@@ -168,9 +168,6 @@ func (h *TestHelper) CreatePriceType(name string) models.PriceType {
 	json.Unmarshal(w.Body.Bytes(), &created)
 	return created
 }
-
-// --- Prices ---
-
 func (h *TestHelper) GetPrice(variantID, priceTypeID uint) models.ItemPrice {
 	path := fmt.Sprintf("/api/v1/stock/prices?item_id=%d&price_type_id=%d", variantID, priceTypeID)
 	w := h.PerformRequest("GET", path, nil)
@@ -181,7 +178,6 @@ func (h *TestHelper) GetPrice(variantID, priceTypeID uint) models.ItemPrice {
 }
 
 // --- Documents ---
-
 func (h *TestHelper) CreateDocument(payload interface{}) models.Document {
 	w := h.PerformRequest("POST", "/api/v1/stock/documents", payload)
 	h.Assert.Equal(http.StatusCreated, w.Code, fmt.Sprintf("Failed to create document. Body: %s", w.Body.String()))
@@ -189,7 +185,6 @@ func (h *TestHelper) CreateDocument(payload interface{}) models.Document {
 	json.Unmarshal(w.Body.Bytes(), &created)
 	return created
 }
-
 func (h *TestHelper) GetDocument(docID uint) models.Document {
 	w := h.PerformRequest("GET", fmt.Sprintf("/api/v1/stock/documents/%d", docID), nil)
 	h.Assert.Equal(http.StatusOK, w.Code)
@@ -197,7 +192,6 @@ func (h *TestHelper) GetDocument(docID uint) models.Document {
 	json.Unmarshal(w.Body.Bytes(), &doc)
 	return doc
 }
-
 func (h *TestHelper) ListDocuments(status ...string) []models.Document {
 	path := "/api/v1/stock/documents"
 	if len(status) > 0 && status[0] != "" {
@@ -209,7 +203,6 @@ func (h *TestHelper) ListDocuments(status ...string) []models.Document {
 	json.Unmarshal(w.Body.Bytes(), &docs)
 	return docs
 }
-
 func (h *TestHelper) UpdateDocument(docID uint, payload interface{}) models.Document {
 	w := h.PerformRequest("PUT", fmt.Sprintf("/api/v1/stock/documents/%d", docID), payload)
 	h.Assert.Equal(http.StatusOK, w.Code)
@@ -217,24 +210,20 @@ func (h *TestHelper) UpdateDocument(docID uint, payload interface{}) models.Docu
 	json.Unmarshal(w.Body.Bytes(), &doc)
 	return doc
 }
-
 func (h *TestHelper) DeleteDocument(docID uint) {
 	w := h.PerformRequest("DELETE", fmt.Sprintf("/api/v1/stock/documents/%d", docID), nil)
 	h.Assert.Equal(http.StatusNoContent, w.Code)
 }
-
 func (h *TestHelper) PostDocument(docID uint) {
 	w := h.PerformRequest("POST", fmt.Sprintf("/api/v1/stock/documents/%d/post", docID), nil)
 	h.Assert.Equal(http.StatusOK, w.Code, fmt.Sprintf("Failed to post document. Body: %s", w.Body.String()))
 }
-
 func (h *TestHelper) CancelDocument(docID uint) {
 	w := h.PerformRequest("POST", fmt.Sprintf("/api/v1/stock/documents/%d/cancel", docID), nil)
 	h.Assert.Equal(http.StatusOK, w.Code, fmt.Sprintf("Failed to cancel document. Body: %s", w.Body.String()))
 }
 
-// --- Warehouses, Categories, Units, Counterpary---
-
+// --- Warehouses ---
 func (h *TestHelper) CreateWarehouse(name string) models.Warehouse {
 	w := h.PerformRequest("POST", "/api/v1/stock/warehouses", gin.H{"name": name})
 	h.Assert.Equal(http.StatusCreated, w.Code)
@@ -242,7 +231,6 @@ func (h *TestHelper) CreateWarehouse(name string) models.Warehouse {
 	json.Unmarshal(w.Body.Bytes(), &created)
 	return created
 }
-
 func (h *TestHelper) GetWarehouse(id uint) models.Warehouse {
 	w := h.PerformRequest("GET", fmt.Sprintf("/api/v1/stock/warehouses/%d", id), nil)
 	h.Assert.Equal(http.StatusOK, w.Code)
@@ -250,7 +238,6 @@ func (h *TestHelper) GetWarehouse(id uint) models.Warehouse {
 	json.Unmarshal(w.Body.Bytes(), &wh)
 	return wh
 }
-
 func (h *TestHelper) ListWarehouses() []models.Warehouse {
 	w := h.PerformRequest("GET", "/api/v1/stock/warehouses", nil)
 	h.Assert.Equal(http.StatusOK, w.Code)
@@ -258,7 +245,6 @@ func (h *TestHelper) ListWarehouses() []models.Warehouse {
 	json.Unmarshal(w.Body.Bytes(), &list)
 	return list
 }
-
 func (h *TestHelper) UpdateWarehouse(id uint, name string) models.Warehouse {
 	w := h.PerformRequest("PUT", fmt.Sprintf("/api/v1/stock/warehouses/%d", id), gin.H{"name": name})
 	h.Assert.Equal(http.StatusOK, w.Code)
@@ -266,12 +252,12 @@ func (h *TestHelper) UpdateWarehouse(id uint, name string) models.Warehouse {
 	json.Unmarshal(w.Body.Bytes(), &updated)
 	return updated
 }
-
 func (h *TestHelper) DeleteWarehouse(id uint) {
 	w := h.PerformRequest("DELETE", fmt.Sprintf("/api/v1/stock/warehouses/%d", id), nil)
 	h.Assert.Equal(http.StatusNoContent, w.Code)
 }
 
+// --- Categories ---
 func (h *TestHelper) CreateCategory(name string) models.Category {
 	w := h.PerformRequest("POST", "/api/v1/stock/categories", gin.H{"name": name})
 	h.Assert.Equal(http.StatusCreated, w.Code)
@@ -280,6 +266,7 @@ func (h *TestHelper) CreateCategory(name string) models.Category {
 	return created
 }
 
+// --- Units ---
 func (h *TestHelper) CreateUnit(name string) models.Unit {
 	w := h.PerformRequest("POST", "/api/v1/stock/units", gin.H{"name": name})
 	h.Assert.Equal(http.StatusCreated, w.Code)
@@ -288,6 +275,7 @@ func (h *TestHelper) CreateUnit(name string) models.Unit {
 	return created
 }
 
+// --- Counterparties ---
 func (h *TestHelper) CreateCounterparty(payload gin.H) models.Counterparty {
 	w := h.PerformRequest("POST", "/api/v1/stock/counterparties", payload)
 	h.Assert.Equal(http.StatusCreated, w.Code)
@@ -296,6 +284,7 @@ func (h *TestHelper) CreateCounterparty(payload gin.H) models.Counterparty {
 	return created
 }
 
+// --- Balances & Movements ---
 func (h *TestHelper) GetBalances(warehouseID uint) []models.StockBalance {
 	w := h.PerformRequest("GET", fmt.Sprintf("/api/v1/stock/balances/warehouse/%d", warehouseID), nil)
 	h.Assert.Equal(http.StatusOK, w.Code)
@@ -303,7 +292,6 @@ func (h *TestHelper) GetBalances(warehouseID uint) []models.StockBalance {
 	json.Unmarshal(w.Body.Bytes(), &balances)
 	return balances
 }
-
 func (h *TestHelper) GetBalancesFiltered(warehouseID uint, queryParams string) []models.StockBalance {
 	path := fmt.Sprintf("/api/v1/stock/balances/warehouse/%d", warehouseID)
 	if queryParams != "" {
@@ -315,24 +303,10 @@ func (h *TestHelper) GetBalancesFiltered(warehouseID uint, queryParams string) [
 	json.Unmarshal(w.Body.Bytes(), &balances)
 	return balances
 }
-
 func (h *TestHelper) ListMovements() []models.StockMovement {
 	w := h.PerformRequest("GET", "/api/v1/stock/movements", nil)
 	h.Assert.Equal(http.StatusOK, w.Code)
 	var movements []models.StockMovement
 	json.Unmarshal(w.Body.Bytes(), &movements)
 	return movements
-}
-
-func decimalPtr(d decimal.Decimal) *decimal.Decimal {
-	return &d
-}
-
-func findBalance(balances []models.StockBalance, variantID uint) models.StockBalance {
-	for _, b := range balances {
-		if b.VariantID == variantID {
-			return b
-		}
-	}
-	return models.StockBalance{}
 }

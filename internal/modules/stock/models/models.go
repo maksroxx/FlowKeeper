@@ -117,10 +117,10 @@ type StockMovement struct {
 	WarehouseID    uint            `json:"warehouse_id"`
 	CounterpartyID *uint           `json:"counterparty_id"`
 	Quantity       decimal.Decimal `gorm:"type:decimal(14,4);" json:"quantity"`
-	Cost           decimal.Decimal `gorm:"type:decimal(14,4);" json:"cost"`
-	Type           string          `json:"type"`
-	Comment        string          `json:"comment"`
-	CreatedAt      time.Time       `json:"created_at"`
+	// 	Cost           decimal.Decimal `gorm:"type:decimal(14,4);" json:"cost"`
+	Type      string    `json:"type"`
+	Comment   string    `json:"comment"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type StockBalance struct {
@@ -128,7 +128,7 @@ type StockBalance struct {
 	WarehouseID uint            `gorm:"index:idx_wh_variant,unique" json:"warehouse_id"`
 	VariantID   uint            `gorm:"column:item_id;index:idx_wh_variant,unique" json:"variant_id"`
 	Quantity    decimal.Decimal `gorm:"type:decimal(14,4);" json:"quantity"`
-	TotalCost   decimal.Decimal `gorm:"type:decimal(18,4);" json:"total_cost"`
+	// TotalCost   decimal.Decimal `gorm:"type:decimal(18,4);" json:"total_cost"`
 }
 
 type StockReservation struct {
@@ -164,4 +164,15 @@ type Item struct {
 	SKU        string `gorm:"unique"`
 	UnitID     uint
 	CategoryID uint
+}
+
+type StockLot struct {
+	ID          uint `gorm:"primaryKey"`
+	WarehouseID uint `gorm:"index:idx_wh_variant_lot"`
+	VariantID   uint `gorm:"index:idx_wh_variant_lot"`
+
+	IncomeDocumentID uint
+	ArrivalDate      time.Time `gorm:"index"`
+
+	CurrentQuantity decimal.Decimal `gorm:"type:decimal(14,4);"`
 }

@@ -3,6 +3,7 @@ package repository
 import (
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type ReservationRepository interface {
@@ -22,7 +23,11 @@ func (r *reservationRepo) GetReservationWithTx(tx *gorm.DB, warehouseID, variant
 		db = tx
 	}
 	var res models.StockReservation
-	err := db.Where("warehouse_id = ? AND variant_id = ?", warehouseID, variantID).First(&res).Error
+	err := db.Clauses(clause.Locking{Strength: "UPDATE"}).
+		// Where("warehouse_id = ? AND item_id = ?", warehouseID, variantID).
+		Where("warehouse_id = ? AND variant_id = ?", warehouseID, variantID).
+		First(&res).Error
+
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil

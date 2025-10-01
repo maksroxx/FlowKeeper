@@ -4,100 +4,112 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
-	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 
-	stock "github.com/maksroxx/flowkeeper/internal/modules/stock/models"
+	"github.com/maksroxx/flowkeeper/internal/modules/stock/config"
+	"github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/repository"
+	"github.com/shopspring/decimal"
 )
 
+type StrategyFactory interface {
+	GetStrategy(policy string) (QuantityStrategy, error)
+}
+type strategyFactoryImpl struct {
+	balanceRepo  repository.BalanceRepository
+	movementRepo repository.StockMovementRepository
+	lotRepo      repository.LotRepository
+}
+
+func NewStrategyFactory(b repository.BalanceRepository, m repository.StockMovementRepository, l repository.LotRepository) StrategyFactory {
+	return &strategyFactoryImpl{balanceRepo: b, movementRepo: m, lotRepo: l}
+}
+func (f *strategyFactoryImpl) GetStrategy(policy string) (QuantityStrategy, error) {
+	switch policy {
+	case "total":
+		return NewTotalQuantityStrategy(f.balanceRepo, f.movementRepo), nil
+	case "fifo":
+		return NewFifoQuantityStrategy(f.lotRepo, f.movementRepo, f.balanceRepo), nil
+	default:
+		return nil, fmt.Errorf("unknown quantity accounting policy: %s", policy)
+	}
+}
+
 type InventoryService interface {
-	ProcessDocumentWithTx(tx *gorm.DB, doc *stock.Document) error
-	RevertDocumentWithTx(tx *gorm.DB, doc *stock.Document) error
-
+	ProcessDocumentWithTx(tx *gorm.DB, doc *models.Document) error
+	RevertDocumentWithTx(tx *gorm.DB, doc *models.Document) error
 	GetAvailableQuantity(warehouseID, variantID uint) (decimal.Decimal, error)
-	GetBalance(warehouseID, variantID uint) (*stock.StockBalance, error)
-	ListByWarehouse(warehouseID uint) ([]stock.StockBalance, error)
-	ListByWarehouseFiltered(warehouseID uint, f stock.StockFilter) ([]stock.StockBalance, error)
+	ListByWarehouseFiltered(warehouseID uint, f models.StockFilter) ([]models.StockBalance, error)
 }
-
 type inventoryService struct {
-	balanceRepo     repository.BalanceRepository
+	strategyFactory StrategyFactory
 	reservationRepo repository.ReservationRepository
-	movementRepo    repository.StockMovementRepository
+	balanceRepo     repository.BalanceRepository
+	config          *config.Config
 }
 
-func NewInventoryService(b repository.BalanceRepository, r repository.ReservationRepository, m repository.StockMovementRepository) InventoryService {
-	return &inventoryService{
-		balanceRepo:     b,
-		reservationRepo: r,
-		movementRepo:    m,
+func NewInventoryService(factory StrategyFactory, r repository.ReservationRepository, b repository.BalanceRepository, cfg *config.Config) InventoryService {
+	return &inventoryService{strategyFactory: factory, reservationRepo: r, balanceRepo: b, config: cfg}
+}
+
+func (s *inventoryService) ProcessDocumentWithTx(tx *gorm.DB, doc *models.Document) error {
+	strategy, err := s.strategyFactory.GetStrategy(s.config.AccountingPolicy)
+	if err != nil {
+		return err
+	}
+
+	switch toUpper(doc.Type) {
+	case "ORDER":
+		return s.processOrder(tx, doc)
+	case "OUTCOME":
+		if doc.BaseDocumentID != nil {
+			if err := s.processReservationRelease(tx, doc); err != nil {
+				return err
+			}
+		}
+		return strategy.ProcessOutcome(tx, doc, s.config)
+	case "INCOME":
+		return strategy.ProcessIncome(tx, doc, s.config)
+	default:
+		return fmt.Errorf("document type '%s' not supported for inventory processing", doc.Type)
 	}
 }
 
-func (s *inventoryService) GetAvailableQuantity(warehouseID, variantID uint) (decimal.Decimal, error) {
-	return s.getAvailableQuantityWithTx(nil, warehouseID, variantID)
-}
-
-func (s *inventoryService) GetBalance(warehouseID, variantID uint) (*stock.StockBalance, error) {
-	return s.balanceRepo.GetBalanceWithTx(nil, warehouseID, variantID)
-}
-
-func (s *inventoryService) ListByWarehouse(warehouseID uint) ([]stock.StockBalance, error) {
-	return s.balanceRepo.ListByWarehouse(warehouseID)
-}
-
-func (s *inventoryService) ListByWarehouseFiltered(warehouseID uint, f stock.StockFilter) ([]stock.StockBalance, error) {
-	return s.balanceRepo.ListByWarehouseFiltered(warehouseID, f)
-}
-
-func (s *inventoryService) ProcessDocumentWithTx(tx *gorm.DB, doc *stock.Document) error {
-	if doc == nil {
-		return errors.New("nil document")
+func (s *inventoryService) RevertDocumentWithTx(tx *gorm.DB, doc *models.Document) error {
+	policy := s.config.AccountingPolicy
+	strategy, err := s.strategyFactory.GetStrategy(policy)
+	if err != nil {
+		return err
 	}
-	if len(doc.Items) == 0 {
-		return errors.New("document must contain at least one item")
+
+	switch toUpper(doc.Type) {
+	case "ORDER":
+		return s.revertOrder(tx, doc)
+	case "OUTCOME":
+		if doc.BaseDocumentID != nil {
+			if err := s.revertReservationRelease(tx, doc); err != nil {
+				return err
+			}
+		}
 	}
 
 	switch toUpper(doc.Type) {
 	case "INCOME":
-		return s.processIncomeWithTx(tx, doc)
+		return strategy.RevertIncome(tx, doc, s.config)
 	case "OUTCOME":
-		return s.processOutcomeWithTx(tx, doc)
-	case "ORDER":
-		return s.processOrderWithTx(tx, doc)
-	case "TRANSFER":
-		return s.processTransferWithTx(tx, doc)
-	case "INVENTORY":
-		return s.processInventoryWithTx(tx, doc)
-	default:
-		return fmt.Errorf("unsupported document type for inventory processing: %s", doc.Type)
+		return strategy.RevertOutcome(tx, doc, s.config)
 	}
+
+	return nil
 }
 
-func (s *inventoryService) RevertDocumentWithTx(tx *gorm.DB, doc *stock.Document) error {
-	if doc == nil {
-		return errors.New("nil document")
-	}
-
-	switch toUpper(doc.Type) {
-	case "INCOME", "OUTCOME", "TRANSFER", "INVENTORY":
-		return s.revertPhysicalMovement(tx, doc)
-	case "ORDER":
-		return s.revertOrder(tx, doc)
-	default:
-		return fmt.Errorf("revert for document type '%s' is not implemented", doc.Type)
-	}
-}
-
-func (s *inventoryService) getAvailableQuantityWithTx(tx *gorm.DB, warehouseID, variantID uint) (decimal.Decimal, error) {
-	balance, err := s.balanceRepo.GetBalanceWithTx(tx, warehouseID, variantID)
+func (s *inventoryService) GetAvailableQuantity(warehouseID, variantID uint) (decimal.Decimal, error) {
+	balance, err := s.balanceRepo.GetBalanceWithTx(nil, warehouseID, variantID)
 	if err != nil {
 		return decimal.Zero, err
 	}
-	reservation, err := s.reservationRepo.GetReservationWithTx(tx, warehouseID, variantID)
+	reservation, err := s.reservationRepo.GetReservationWithTx(nil, warehouseID, variantID)
 	if err != nil {
 		return decimal.Zero, err
 	}
@@ -110,22 +122,25 @@ func (s *inventoryService) getAvailableQuantityWithTx(tx *gorm.DB, warehouseID, 
 	if reservation != nil {
 		reservationQty = reservation.Quantity
 	}
-
 	return balanceQty.Sub(reservationQty), nil
 }
 
-func (s *inventoryService) processOrderWithTx(tx *gorm.DB, doc *stock.Document) error {
+func (s *inventoryService) ListByWarehouseFiltered(warehouseID uint, f models.StockFilter) ([]models.StockBalance, error) {
+	return s.balanceRepo.ListByWarehouseFiltered(warehouseID, f)
+}
+
+func (s *inventoryService) processOrder(tx *gorm.DB, doc *models.Document) error {
 	if doc.WarehouseID == nil {
 		return errors.New("warehouse_id is required for order")
 	}
 	for _, item := range doc.Items {
-		available, err := s.getAvailableQuantityWithTx(tx, *doc.WarehouseID, item.VariantID)
+		available, err := s.GetAvailableQuantity(*doc.WarehouseID, item.VariantID)
 		if err != nil {
 			return err
 		}
 
 		if available.LessThan(item.Quantity) {
-			return fmt.Errorf("not enough available stock for variant %d: available=%s, needed=%s", item.VariantID, available.String(), item.Quantity.String())
+			return fmt.Errorf("not enough available stock for variant %d", item.VariantID)
 		}
 
 		res, err := s.reservationRepo.GetReservationWithTx(tx, *doc.WarehouseID, item.VariantID)
@@ -133,11 +148,7 @@ func (s *inventoryService) processOrderWithTx(tx *gorm.DB, doc *stock.Document) 
 			return err
 		}
 		if res == nil {
-			res = &stock.StockReservation{
-				WarehouseID: *doc.WarehouseID,
-				VariantID:   item.VariantID,
-				Quantity:    decimal.Zero,
-			}
+			res = &models.StockReservation{WarehouseID: *doc.WarehouseID, VariantID: item.VariantID, Quantity: decimal.Zero}
 		}
 		res.Quantity = res.Quantity.Add(item.Quantity)
 		if err := s.reservationRepo.SaveReservationWithTx(tx, res); err != nil {
@@ -147,36 +158,9 @@ func (s *inventoryService) processOrderWithTx(tx *gorm.DB, doc *stock.Document) 
 	return nil
 }
 
-func (s *inventoryService) processOutcomeWithTx(tx *gorm.DB, doc *stock.Document) error {
-	if err := s.processPhysicalOutcomeWithTx(tx, doc); err != nil {
-		return err
-	}
-
-	if doc.BaseDocumentID != nil {
-		if doc.WarehouseID == nil {
-			return errors.New("warehouse_id required for outcome based on order")
-		}
-		for _, item := range doc.Items {
-			res, err := s.reservationRepo.GetReservationWithTx(tx, *doc.WarehouseID, item.VariantID)
-			if err != nil {
-				return err
-			}
-			if res == nil {
-				continue
-			}
-
-			res.Quantity = res.Quantity.Sub(item.Quantity)
-			if err := s.reservationRepo.SaveReservationWithTx(tx, res); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (s *inventoryService) revertOrder(tx *gorm.DB, doc *stock.Document) error {
+func (s *inventoryService) processReservationRelease(tx *gorm.DB, doc *models.Document) error {
 	if doc.WarehouseID == nil {
-		return errors.New("warehouse_id required to revert order")
+		return errors.New("warehouse_id required")
 	}
 	for _, item := range doc.Items {
 		res, err := s.reservationRepo.GetReservationWithTx(tx, *doc.WarehouseID, item.VariantID)
@@ -186,7 +170,6 @@ func (s *inventoryService) revertOrder(tx *gorm.DB, doc *stock.Document) error {
 		if res == nil {
 			continue
 		}
-
 		res.Quantity = res.Quantity.Sub(item.Quantity)
 		if err := s.reservationRepo.SaveReservationWithTx(tx, res); err != nil {
 			return err
@@ -195,175 +178,24 @@ func (s *inventoryService) revertOrder(tx *gorm.DB, doc *stock.Document) error {
 	return nil
 }
 
-func (s *inventoryService) processIncomeWithTx(tx *gorm.DB, doc *stock.Document) error {
+func (s *inventoryService) revertOrder(tx *gorm.DB, doc *models.Document) error {
+	return s.processReservationRelease(tx, doc) // Отмена заказа = снятие резерва
+}
+
+func (s *inventoryService) revertReservationRelease(tx *gorm.DB, doc *models.Document) error {
 	if doc.WarehouseID == nil {
-		return errors.New("warehouse_id is required for income")
+		return errors.New("warehouse_id required")
 	}
-	for _, it := range doc.Items {
-		if it.Price == nil {
-			return fmt.Errorf("price must be specified for income item ID %d", it.VariantID)
-		}
-
-		itemCost := *it.Price
-		mv := &stock.StockMovement{
-			DocumentID: &doc.ID, VariantID: it.VariantID, WarehouseID: *doc.WarehouseID,
-			CounterpartyID: doc.CounterpartyID, Quantity: it.Quantity, Cost: itemCost,
-			Type: "INCOME", Comment: doc.Comment, CreatedAt: time.Now(),
-		}
-		if _, err := s.movementRepo.CreateWithTx(tx, mv); err != nil {
-			return err
-		}
-
-		bal, err := s.balanceRepo.GetBalanceWithTx(tx, *doc.WarehouseID, it.VariantID)
+	for _, item := range doc.Items {
+		res, err := s.reservationRepo.GetReservationWithTx(tx, *doc.WarehouseID, item.VariantID)
 		if err != nil {
 			return err
 		}
-		if bal == nil {
-			bal = &stock.StockBalance{
-				WarehouseID: *doc.WarehouseID, VariantID: it.VariantID,
-				Quantity: decimal.Zero, TotalCost: decimal.Zero,
-			}
+		if res == nil {
+			res = &models.StockReservation{WarehouseID: *doc.WarehouseID, VariantID: item.VariantID, Quantity: decimal.Zero}
 		}
-
-		bal.Quantity = bal.Quantity.Add(it.Quantity)
-		bal.TotalCost = bal.TotalCost.Add(it.Quantity.Mul(itemCost))
-
-		if err := s.balanceRepo.SaveBalanceWithTx(tx, bal); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *inventoryService) processPhysicalOutcomeWithTx(tx *gorm.DB, doc *stock.Document) error {
-	if doc.WarehouseID == nil {
-		return errors.New("warehouse_id is required for outcome")
-	}
-	for _, it := range doc.Items {
-		bal, err := s.balanceRepo.GetBalanceWithTx(tx, *doc.WarehouseID, it.VariantID)
-		if err != nil || bal == nil {
-			return fmt.Errorf("no stock for variant %d", it.VariantID)
-		}
-		if bal.Quantity.LessThan(it.Quantity) {
-			return fmt.Errorf("not enough stock for variant %d: have=%s need=%s", it.VariantID, bal.Quantity.String(), it.Quantity.String())
-		}
-
-		var averageCost decimal.Decimal
-		if !bal.Quantity.IsZero() {
-			averageCost = bal.TotalCost.Div(bal.Quantity).Round(4)
-		}
-
-		mv := &stock.StockMovement{
-			DocumentID: &doc.ID, VariantID: it.VariantID, WarehouseID: *doc.WarehouseID,
-			CounterpartyID: doc.CounterpartyID, Quantity: it.Quantity.Neg(), Cost: averageCost,
-			Type: "OUTCOME", Comment: doc.Comment, CreatedAt: time.Now(),
-		}
-		if _, err := s.movementRepo.CreateWithTx(tx, mv); err != nil {
-			return err
-		}
-
-		bal.Quantity = bal.Quantity.Sub(it.Quantity)
-		bal.TotalCost = bal.TotalCost.Sub(it.Quantity.Mul(averageCost))
-
-		if err := s.balanceRepo.SaveBalanceWithTx(tx, bal); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *inventoryService) revertPhysicalMovement(tx *gorm.DB, doc *stock.Document) error {
-	moves, err := s.movementRepo.ListByDocumentWithTx(tx, doc.ID)
-	if err != nil {
-		return err
-	}
-	if len(moves) == 0 {
-		return nil
-	}
-
-	for _, mv := range moves {
-		cancel := &stock.StockMovement{
-			DocumentID: &doc.ID, VariantID: mv.VariantID, WarehouseID: mv.WarehouseID,
-			Quantity: mv.Quantity.Neg(), Cost: mv.Cost.Neg(),
-			Type: "CANCEL", Comment: "cancel of doc " + doc.Number, CreatedAt: time.Now(),
-		}
-		if _, err := s.movementRepo.CreateWithTx(tx, cancel); err != nil {
-			return err
-		}
-
-		bal, err := s.balanceRepo.GetBalanceWithTx(tx, mv.WarehouseID, mv.VariantID)
-		if err != nil {
-			return err
-		}
-		if bal == nil {
-			bal = &stock.StockBalance{WarehouseID: mv.WarehouseID, VariantID: mv.VariantID}
-		}
-
-		bal.Quantity = bal.Quantity.Sub(mv.Quantity)
-		bal.TotalCost = bal.TotalCost.Sub(mv.Quantity.Mul(mv.Cost))
-
-		if err := s.balanceRepo.SaveBalanceWithTx(tx, bal); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *inventoryService) processTransferWithTx(tx *gorm.DB, doc *stock.Document) error {
-	return errors.New("transfer with cost/reservation calculation is not yet implemented")
-}
-func (s *inventoryService) processInventoryWithTx(tx *gorm.DB, doc *stock.Document) error {
-	if doc.WarehouseID == nil {
-		return errors.New("warehouse_id is required for inventory")
-	}
-
-	for _, it := range doc.Items {
-		bal, err := s.balanceRepo.GetBalanceWithTx(tx, *doc.WarehouseID, it.VariantID)
-		if err != nil {
-			return err
-		}
-
-		if bal == nil {
-			bal = &stock.StockBalance{
-				WarehouseID: *doc.WarehouseID,
-				VariantID:   it.VariantID,
-				Quantity:    decimal.Zero,
-				TotalCost:   decimal.Zero,
-			}
-		}
-
-		currentQty := bal.Quantity
-		currentCost := bal.TotalCost
-		newQty := it.Quantity
-		movementQty := newQty.Sub(currentQty)
-
-		var movementCost decimal.Decimal
-		if movementQty.IsPositive() {
-			if it.Price != nil {
-				movementCost = *it.Price
-			} else {
-				movementCost = decimal.Zero
-			}
-		} else {
-			if !currentQty.IsZero() {
-				movementCost = currentCost.Div(currentQty).Round(4)
-			}
-		}
-
-		mv := &stock.StockMovement{
-			DocumentID: &doc.ID, VariantID: it.VariantID, WarehouseID: *doc.WarehouseID,
-			Quantity: movementQty, Cost: movementCost, Type: "INVENTORY",
-			Comment: doc.Comment, CreatedAt: time.Now(),
-		}
-		if _, err := s.movementRepo.CreateWithTx(tx, mv); err != nil {
-			return err
-		}
-
-		bal.Quantity = newQty
-		costChange := movementQty.Mul(movementCost)
-		bal.TotalCost = bal.TotalCost.Add(costChange)
-
-		if err := s.balanceRepo.SaveBalanceWithTx(tx, bal); err != nil {
+		res.Quantity = res.Quantity.Add(item.Quantity)
+		if err := s.reservationRepo.SaveReservationWithTx(tx, res); err != nil {
 			return err
 		}
 	}

@@ -94,7 +94,6 @@ func TestFullE2E_BusinessCycle(t *testing.T) {
 
 	finalBalanceBlue := findBalance(finalBalances, variantBlue.ID)
 	h.Assert.True(decimal.NewFromInt(15).Equal(finalBalanceBlue.Quantity), "Финальный остаток синих футболок")
-	h.Assert.True(decimal.NewFromInt(12000).Equal(finalBalanceBlue.TotalCost), "Финальная себестоимость синих футболок")
 
 	finalBalanceRed := findBalance(finalBalances, variantRed.ID)
 	h.Assert.True(decimal.NewFromInt(13).Equal(finalBalanceRed.Quantity), "Финальный остаток красных футболок")

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	stock "github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 )
@@ -28,7 +29,11 @@ func (r *balanceRepo) GetBalanceWithTx(tx *gorm.DB, warehouseID, variantID uint)
 		db = tx
 	}
 	var b stock.StockBalance
-	if err := db.Where("warehouse_id = ? AND item_id = ?", warehouseID, variantID).First(&b).Error; err != nil {
+	err := db.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("warehouse_id = ? AND item_id = ?", warehouseID, variantID).
+		First(&b).Error
+
+	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
