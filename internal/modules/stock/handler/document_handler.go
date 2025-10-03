@@ -49,20 +49,13 @@ func (h *DocumentHandler) Create(c *gin.Context) {
 func (h *DocumentHandler) List(c *gin.Context) {
 	status := c.Query("status")
 
-	var docs []models.Document
-	var err error
-
-	if status != "" {
-		docs, err = h.service.ListByStatus(status)
-	} else {
-		docs, err = h.service.List()
-	}
-
+	docDTOs, err := h.service.ListAsDTO(status)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, docs)
+
+	c.JSON(http.StatusOK, docDTOs)
 }
 
 func (h *DocumentHandler) GetByID(c *gin.Context) {
@@ -71,7 +64,7 @@ func (h *DocumentHandler) GetByID(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
 		return
 	}
-	doc, err := h.service.GetByID(uint(id))
+	doc, err := h.service.GetByIDAsDTO(uint(id))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
 		return
@@ -86,18 +79,24 @@ func (h *DocumentHandler) Update(c *gin.Context) {
 		return
 	}
 
-	var doc models.Document
-	if err := c.ShouldBindJSON(&doc); err != nil {
+	var updatePayload struct {
+		Comment string `json:"comment"`
+	}
+	if err := c.ShouldBindJSON(&updatePayload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	doc.ID = uint(id)
 
-	updatedDoc, err := h.service.Update(&doc)
+	docToUpdate := &models.Document{
+		Comment: updatePayload.Comment,
+	}
+
+	updatedDoc, err := h.service.Update(uint(id), docToUpdate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(http.StatusOK, updatedDoc)
 }
 

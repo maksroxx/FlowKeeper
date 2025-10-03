@@ -8,6 +8,7 @@ import (
 type WarehouseRepository interface {
 	Create(w *stock.Warehouse) (*stock.Warehouse, error)
 	GetByID(id uint) (*stock.Warehouse, error)
+	GetByIDs(ids []uint) ([]stock.Warehouse, error)
 	List() ([]stock.Warehouse, error)
 	Update(w *stock.Warehouse) (*stock.Warehouse, error)
 	Delete(id uint) error
@@ -28,6 +29,15 @@ func (r *warehouseRepo) GetByID(id uint) (*stock.Warehouse, error) {
 		return nil, err
 	}
 	return &wh, nil
+}
+
+func (r *warehouseRepo) GetByIDs(ids []uint) ([]stock.Warehouse, error) {
+	var warehouses []stock.Warehouse
+	if len(ids) == 0 {
+		return warehouses, nil
+	}
+	err := r.db.Where("id IN ?", ids).Find(&warehouses).Error
+	return warehouses, err
 }
 
 func (r *warehouseRepo) List() ([]stock.Warehouse, error) {

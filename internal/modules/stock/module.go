@@ -48,7 +48,7 @@ func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 
 	// --- services ---
 	productSvc := service.NewProductService(productRepo)
-	variantSvc := service.NewVariantService(variantRepo)
+	variantSvc := service.NewVariantService(variantRepo, productRepo, unitRepo)
 	charactSvc := service.NewCharacteristicService(charactRepo)
 	priceTypeSvc := service.NewPriceTypeService(priceTypeRepo)
 	priceSvc := service.NewPriceService(priceRepo)
@@ -56,9 +56,16 @@ func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	catSvc := service.NewCategoryService(catRepo)
 	cpSvc := service.NewCounterpartyService(cpRepo)
 	strategyFactory := service.NewStrategyFactory(balanceRepo, movRepo, lotRepo)
-	inventorySvc := service.NewInventoryService(strategyFactory, reservRepo, balanceRepo, stockCfg)
-	docSvc := service.NewDocumentService(docRepo, historyRepo, inventorySvc, priceSvc, seqSvc, txManager)
-	movSvc := service.NewStockMovementService(movRepo)
+	inventorySvc := service.NewInventoryService(strategyFactory, reservRepo, balanceRepo, stockCfg, variantRepo, productRepo, unitRepo)
+	docSvc := service.NewDocumentService(
+		docRepo, historyRepo,
+		inventorySvc, priceSvc,
+		seqSvc, txManager,
+		variantRepo, productRepo,
+		whRepo, cpRepo,
+		priceTypeRepo,
+	)
+	movSvc := service.NewStockMovementService(movRepo, docRepo, variantRepo, productRepo, whRepo)
 	unitSvc := service.NewUnitService(unitRepo)
 	whSvc := service.NewWarehouseService(whRepo)
 

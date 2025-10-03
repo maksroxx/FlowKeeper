@@ -8,6 +8,7 @@ import (
 type CounterpartyRepository interface {
 	Create(cp *stock.Counterparty) (*stock.Counterparty, error)
 	GetByID(id uint) (*stock.Counterparty, error)
+	GetByIDs(ids []uint) ([]stock.Counterparty, error)
 	List() ([]stock.Counterparty, error)
 	Update(cp *stock.Counterparty) (*stock.Counterparty, error)
 	Delete(id uint) error
@@ -30,6 +31,15 @@ func (r *counterpartyRepository) GetByID(id uint) (*stock.Counterparty, error) {
 		return nil, err
 	}
 	return &cp, nil
+}
+
+func (r *counterpartyRepository) GetByIDs(ids []uint) ([]stock.Counterparty, error) {
+	var counterparties []stock.Counterparty
+	if len(ids) == 0 {
+		return counterparties, nil
+	}
+	err := r.db.Where("id IN ?", ids).Find(&counterparties).Error
+	return counterparties, err
 }
 
 func (r *counterpartyRepository) List() ([]stock.Counterparty, error) {

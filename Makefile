@@ -3,7 +3,7 @@ BIN_DIR=bin
 CONFIG=config/config.yaml
 DB_DIR=data
 
-.PHONY: all build run clean test lint
+.PHONY: all build run clean test lint seed
 
 all: build
 
@@ -31,3 +31,8 @@ lint:
 migrate:
 	@echo "Running DB migrations..."
 	@go run ./cmd/migrate
+
+seed:
+	@echo "Seeding the database..."
+	@mkdir -p $(DB_DIR)
+	@go run ./seeder/seeder.go

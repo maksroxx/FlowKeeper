@@ -48,13 +48,13 @@ func TestInventoryLifecycle_Integration(t *testing.T) {
 	// 3. Отмена расхода (товар должен вернуться)
 	h.CancelDocument(outcomeDoc.ID)
 
-	// balance3 := h.GetBalances(warehouse.ID)[0]
-	// h.Assert.True(decimal.NewFromInt(10).Equal(balance3.Quantity), "Остаток должен вернуться к 10")
+	balance3 := h.GetBalances(warehouse.ID)[0]
+	h.Assert.True(decimal.NewFromInt(10).Equal(balance3.Quantity), "Остаток должен вернуться к 10")
 
-	// // 4. Отмена прихода (остаток должен стать нулевым)
-	// h.CancelDocument(incomeDoc.ID)
+	// 4. Отмена прихода (остаток должен стать нулевым)
+	h.CancelDocument(incomeDoc.ID)
 
-	// finalBalances := h.GetBalances(warehouse.ID)
-	// h.Assert.Len(finalBalances, 1)
-	// h.Assert.True(decimal.Zero.Equal(finalBalances[0].Quantity), "Остаток должен стать 0")
+	finalBalances := h.GetBalances(warehouse.ID)
+	h.Assert.Len(finalBalances, 1)
+	h.Assert.True(decimal.Zero.Equal(finalBalances[0].Quantity), "Остаток должен стать 0")
 }

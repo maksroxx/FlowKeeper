@@ -125,13 +125,27 @@ func (h *TestHelper) GetVariant(id uint) models.Variant {
 	json.Unmarshal(w.Body.Bytes(), &v)
 	return v
 }
-func (h *TestHelper) ListVariants() []models.Variant {
-	w := h.PerformRequest("GET", "/api/v1/stock/variants", nil)
-	h.Assert.Equal(http.StatusOK, w.Code)
-	var vs []models.Variant
-	json.Unmarshal(w.Body.Bytes(), &vs)
-	return vs
+
+//	func (h *TestHelper) ListVariants() []models.Variant {
+//		w := h.PerformRequest("GET", "/api/v1/stock/variants", nil)
+//		h.Assert.Equal(http.StatusOK, w.Code)
+//		var vs []models.Variant
+//		json.Unmarshal(w.Body.Bytes(), &vs)
+//		return vs
+//	}
+
+func (h *TestHelper) SearchVariants(queryParams string) []models.Variant {
+	path := "/api/v1/stock/variants"
+	if queryParams != "" {
+		path = fmt.Sprintf("%s?%s", path, queryParams)
+	}
+	w := h.PerformRequest("GET", path, nil)
+	h.Assert.Equal(http.StatusOK, w.Code, fmt.Sprintf("Failed to search variants. Body: %s", w.Body.String()))
+	var variants []models.Variant
+	json.Unmarshal(w.Body.Bytes(), &variants)
+	return variants
 }
+
 func (h *TestHelper) UpdateVariant(id uint, payload gin.H) models.Variant {
 	w := h.PerformRequest("PUT", fmt.Sprintf("/api/v1/stock/variants/%d", id), payload)
 	h.Assert.Equal(http.StatusOK, w.Code)
@@ -309,4 +323,12 @@ func (h *TestHelper) ListMovements() []models.StockMovement {
 	var movements []models.StockMovement
 	json.Unmarshal(w.Body.Bytes(), &movements)
 	return movements
+}
+
+func variantIDs(variants []models.Variant) []uint {
+	ids := make([]uint, len(variants))
+	for i, v := range variants {
+		ids[i] = v.ID
+	}
+	return ids
 }

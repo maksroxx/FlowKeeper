@@ -8,6 +8,7 @@ import (
 type UnitRepository interface {
 	Create(u *stock.Unit) (*stock.Unit, error)
 	GetByID(id uint) (*stock.Unit, error)
+	GetByIDs(ids []uint) ([]stock.Unit, error)
 	List() ([]stock.Unit, error)
 	Update(u *stock.Unit) (*stock.Unit, error)
 	Delete(id uint) error
@@ -28,6 +29,15 @@ func (r *unitRepo) GetByID(id uint) (*stock.Unit, error) {
 		return nil, err
 	}
 	return &unit, nil
+}
+
+func (r *unitRepo) GetByIDs(ids []uint) ([]stock.Unit, error) {
+	var units []stock.Unit
+	if len(ids) == 0 {
+		return units, nil
+	}
+	err := r.db.Where("id IN ?", ids).Find(&units).Error
+	return units, err
 }
 
 func (r *unitRepo) List() ([]stock.Unit, error) {

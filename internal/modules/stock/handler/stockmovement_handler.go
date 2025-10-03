@@ -25,12 +25,12 @@ func (h *MovementHandler) Register(r *gin.RouterGroup) {
 }
 
 func (h *MovementHandler) List(c *gin.Context) {
-	movements, err := h.service.List()
+	movementDTOs, err := h.service.ListAsDTO()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, movements)
+	c.JSON(http.StatusOK, movementDTOs)
 }
 
 func (h *MovementHandler) GetByID(c *gin.Context) {

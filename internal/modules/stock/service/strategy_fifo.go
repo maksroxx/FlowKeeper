@@ -79,7 +79,7 @@ func (s *FifoQuantityStrategy) ProcessOutcome(tx *gorm.DB, doc *models.Document,
 
 			mv := &models.StockMovement{
 				DocumentID: &doc.ID, VariantID: lot.VariantID, WarehouseID: lot.WarehouseID,
-				Quantity: qtyFromLot.Neg(), Type: "OUTCOME", CreatedAt: time.Now(),
+				Quantity: qtyFromLot.Neg(), Type: "OUTCOME", SourceLotID: &lot.ID, CreatedAt: time.Now(),
 			}
 			if _, err := s.movementRepo.CreateWithTx(tx, mv); err != nil {
 				return err
@@ -105,12 +105,35 @@ func (s *FifoQuantityStrategy) ProcessOutcome(tx *gorm.DB, doc *models.Document,
 }
 
 func (s *FifoQuantityStrategy) RevertIncome(tx *gorm.DB, doc *models.Document, cfg *config.Config) error {
-	// ... логика отмены: удалить партии и движения, обновить StockBalance
-	return nil
+	if err := s.revertMovementsAndUpdateBalance(tx, doc); err != nil {
+		return err
+	}
+	return s.lotRepo.DeleteByIncomeDocumentID(tx, doc.ID)
 }
+
 func (s *FifoQuantityStrategy) RevertOutcome(tx *gorm.DB, doc *models.Document, cfg *config.Config) error {
-	// ... более сложная логика: "вернуть" количество в нужные партии
-	return nil
+	moves, err := s.movementRepo.ListByDocumentWithTx(tx, doc.ID)
+	if err != nil {
+		return err
+	}
+
+	for _, mv := range moves {
+		if mv.Quantity.IsPositive() || mv.SourceLotID == nil {
+			continue
+		}
+
+		lot, err := s.lotRepo.GetLotByIDForUpdate(tx, *mv.SourceLotID)
+		if err != nil {
+			return fmt.Errorf("source lot with ID %d not found for movement %d", *mv.SourceLotID, mv.ID)
+		}
+
+		lot.CurrentQuantity = lot.CurrentQuantity.Sub(mv.Quantity)
+		if err := s.lotRepo.SaveWithTx(tx, lot); err != nil {
+			return err
+		}
+	}
+
+	return s.revertMovementsAndUpdateBalance(tx, doc)
 }
 
 func updateTotalQuantity(tx *gorm.DB, balanceRepo repository.BalanceRepository, whID, varID uint, qtyChange decimal.Decimal) {
@@ -120,4 +143,24 @@ func updateTotalQuantity(tx *gorm.DB, balanceRepo repository.BalanceRepository, 
 	}
 	bal.Quantity = bal.Quantity.Add(qtyChange)
 	balanceRepo.SaveBalanceWithTx(tx, bal)
+}
+
+func (s *FifoQuantityStrategy) revertMovementsAndUpdateBalance(tx *gorm.DB, doc *models.Document) error {
+	moves, err := s.movementRepo.ListByDocumentWithTx(tx, doc.ID)
+	if err != nil {
+		return err
+	}
+
+	for _, mv := range moves {
+		cancel := &models.StockMovement{
+			DocumentID: &doc.ID, VariantID: mv.VariantID, WarehouseID: mv.WarehouseID,
+			Quantity: mv.Quantity.Neg(), Type: "CANCEL", CreatedAt: time.Now(), SourceLotID: mv.SourceLotID,
+		}
+		if _, err := s.movementRepo.CreateWithTx(tx, cancel); err != nil {
+			return err
+		}
+
+		updateTotalQuantity(tx, s.balanceRepo, mv.WarehouseID, mv.VariantID, mv.Quantity.Neg())
+	}
+	return nil
 }

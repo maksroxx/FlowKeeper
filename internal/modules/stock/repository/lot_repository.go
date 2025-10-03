@@ -8,6 +8,7 @@ import (
 
 type LotRepository interface {
 	GetOldestLotsForUpdate(tx *gorm.DB, warehouseID, variantID uint) ([]models.StockLot, error)
+	GetLotByIDForUpdate(tx *gorm.DB, lotID uint) (*models.StockLot, error)
 	CreateWithTx(tx *gorm.DB, lot *models.StockLot) error
 	SaveWithTx(tx *gorm.DB, lot *models.StockLot) error
 	DeleteWithTx(tx *gorm.DB, lotIDs []uint) error
@@ -27,6 +28,12 @@ func (r *lotRepo) GetOldestLotsForUpdate(tx *gorm.DB, warehouseID, variantID uin
 		Order("arrival_date asc, id asc").
 		Find(&lots).Error
 	return lots, err
+}
+
+func (r *lotRepo) GetLotByIDForUpdate(tx *gorm.DB, lotID uint) (*models.StockLot, error) {
+	var lot models.StockLot
+	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&lot, lotID).Error
+	return &lot, err
 }
 
 func (r *lotRepo) CreateWithTx(tx *gorm.DB, lot *models.StockLot) error {

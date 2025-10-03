@@ -40,17 +40,37 @@ type InventoryService interface {
 	ProcessDocumentWithTx(tx *gorm.DB, doc *models.Document) error
 	RevertDocumentWithTx(tx *gorm.DB, doc *models.Document) error
 	GetAvailableQuantity(warehouseID, variantID uint) (decimal.Decimal, error)
-	ListByWarehouseFiltered(warehouseID uint, f models.StockFilter) ([]models.StockBalance, error)
+	ListByWarehouseFilteredAsDTO(warehouseID uint, f models.StockFilter) ([]models.StockBalanceDTO, error)
 }
 type inventoryService struct {
 	strategyFactory StrategyFactory
 	reservationRepo repository.ReservationRepository
 	balanceRepo     repository.BalanceRepository
 	config          *config.Config
+
+	variantRepo repository.VariantRepository
+	productRepo repository.ProductRepository
+	unitRepo    repository.UnitRepository
 }
 
-func NewInventoryService(factory StrategyFactory, r repository.ReservationRepository, b repository.BalanceRepository, cfg *config.Config) InventoryService {
-	return &inventoryService{strategyFactory: factory, reservationRepo: r, balanceRepo: b, config: cfg}
+func NewInventoryService(
+	factory StrategyFactory,
+	r repository.ReservationRepository,
+	b repository.BalanceRepository,
+	cfg *config.Config,
+	v repository.VariantRepository,
+	p repository.ProductRepository,
+	u repository.UnitRepository,
+) InventoryService {
+	return &inventoryService{
+		strategyFactory: factory,
+		reservationRepo: r,
+		balanceRepo:     b,
+		config:          cfg,
+		variantRepo:     v,
+		productRepo:     p,
+		unitRepo:        u,
+	}
 }
 
 func (s *inventoryService) ProcessDocumentWithTx(tx *gorm.DB, doc *models.Document) error {
@@ -125,8 +145,58 @@ func (s *inventoryService) GetAvailableQuantity(warehouseID, variantID uint) (de
 	return balanceQty.Sub(reservationQty), nil
 }
 
-func (s *inventoryService) ListByWarehouseFiltered(warehouseID uint, f models.StockFilter) ([]models.StockBalance, error) {
-	return s.balanceRepo.ListByWarehouseFiltered(warehouseID, f)
+func (s *inventoryService) ListByWarehouseFilteredAsDTO(warehouseID uint, f models.StockFilter) ([]models.StockBalanceDTO, error) {
+	balances, err := s.balanceRepo.ListByWarehouseFiltered(warehouseID, f)
+	if err != nil {
+		return nil, err
+	}
+	if len(balances) == 0 {
+		return []models.StockBalanceDTO{}, nil
+	}
+
+	variantIDs := make([]uint, len(balances))
+	for i, b := range balances {
+		variantIDs[i] = b.VariantID
+	}
+
+	variants, _ := s.variantRepo.GetByIDs(variantIDs)
+	variantMap := make(map[uint]models.Variant)
+	productIDsMap := make(map[uint]bool)
+	unitIDsMap := make(map[uint]bool)
+	for _, v := range variants {
+		variantMap[v.ID] = v
+		productIDsMap[v.ProductID] = true
+		unitIDsMap[v.UnitID] = true
+	}
+
+	products, _ := s.productRepo.GetByIDs(mapKeysToSlice(productIDsMap))
+	productMap := make(map[uint]models.Product)
+	for _, p := range products {
+		productMap[p.ID] = p
+	}
+
+	units, _ := s.unitRepo.GetByIDs(mapKeysToSlice(unitIDsMap))
+	unitMap := make(map[uint]string)
+	for _, u := range units {
+		unitMap[u.ID] = u.Name
+	}
+
+	dtos := make([]models.StockBalanceDTO, len(balances))
+	for i, b := range balances {
+		variant := variantMap[b.VariantID]
+		product := productMap[variant.ProductID]
+		dtos[i] = models.StockBalanceDTO{
+			ID:          b.ID,
+			WarehouseID: b.WarehouseID,
+			VariantID:   b.VariantID,
+			VariantSKU:  variant.SKU,
+			ProductName: product.Name,
+			UnitName:    unitMap[variant.UnitID],
+			Quantity:    b.Quantity,
+		}
+	}
+
+	return dtos, nil
 }
 
 func (s *inventoryService) processOrder(tx *gorm.DB, doc *models.Document) error {
@@ -179,7 +249,7 @@ func (s *inventoryService) processReservationRelease(tx *gorm.DB, doc *models.Do
 }
 
 func (s *inventoryService) revertOrder(tx *gorm.DB, doc *models.Document) error {
-	return s.processReservationRelease(tx, doc) // Отмена заказа = снятие резерва
+	return s.processReservationRelease(tx, doc)
 }
 
 func (s *inventoryService) revertReservationRelease(tx *gorm.DB, doc *models.Document) error {

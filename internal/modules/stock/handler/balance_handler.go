@@ -55,7 +55,7 @@ func (h *BalanceHandler) GetByWarehouse(c *gin.Context) {
 		}
 	}
 
-	balances, err := h.service.ListByWarehouseFiltered(uint(warehouseID), filter)
+	balances, err := h.service.ListByWarehouseFilteredAsDTO(uint(warehouseID), filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

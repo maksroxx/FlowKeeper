@@ -117,6 +117,7 @@ type StockMovement struct {
 	WarehouseID    uint            `json:"warehouse_id"`
 	CounterpartyID *uint           `json:"counterparty_id"`
 	Quantity       decimal.Decimal `gorm:"type:decimal(14,4);" json:"quantity"`
+	SourceLotID    *uint           `gorm:"index" json:"source_lot_id,omitempty"`
 	// 	Cost           decimal.Decimal `gorm:"type:decimal(14,4);" json:"cost"`
 	Type      string    `json:"type"`
 	Comment   string    `json:"comment"`
@@ -144,12 +145,6 @@ type ItemPrice struct {
 	Price       decimal.Decimal `gorm:"type:decimal(14,2);" json:"price"`
 	Currency    string          `gorm:"default:'RUB'" json:"currency"`
 	UpdatedAt   time.Time       `json:"updated_at"`
-}
-
-type StockFilter struct {
-	CategoryID *uint
-	SKU        *string
-	MinQty     *decimal.Decimal
 }
 
 type DocumentSequence struct {

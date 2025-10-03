@@ -20,6 +20,8 @@ type DocumentRepository interface {
 	UpdateWithTx(tx *gorm.DB, doc *stock.Document) (*stock.Document, error)
 	CreateWithTx(tx *gorm.DB, doc *stock.Document) (*stock.Document, error)
 	GetByIDWithTx(tx *gorm.DB, id uint) (*stock.Document, error)
+
+	GetByIDs(ids []uint) ([]stock.Document, error)
 }
 
 type documentRepo struct {
@@ -117,4 +119,13 @@ func (r *documentRepo) UpdateWithTx(tx *gorm.DB, doc *stock.Document) (*stock.Do
 
 func (r *documentRepo) Delete(id uint) error {
 	return r.db.Delete(&stock.Document{}, id).Error
+}
+
+func (r *documentRepo) GetByIDs(ids []uint) ([]stock.Document, error) {
+	var documents []stock.Document
+	if len(ids) == 0 {
+		return documents, nil
+	}
+	err := r.db.Where("id IN ?", ids).Find(&documents).Error
+	return documents, err
 }

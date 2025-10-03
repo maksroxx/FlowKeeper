@@ -8,6 +8,7 @@ import (
 type PriceTypeRepository interface {
 	Create(pt *models.PriceType) (*models.PriceType, error)
 	GetByID(id uint) (*models.PriceType, error)
+	GetByIDs(ids []uint) ([]models.PriceType, error)
 	List() ([]models.PriceType, error)
 	Update(pt *models.PriceType) (*models.PriceType, error)
 	Delete(id uint) error
@@ -30,6 +31,15 @@ func (r *priceTypeRepo) GetByID(id uint) (*models.PriceType, error) {
 		return nil, err
 	}
 	return &pt, nil
+}
+
+func (r *priceTypeRepo) GetByIDs(ids []uint) ([]models.PriceType, error) {
+	var priceTypes []models.PriceType
+	if len(ids) == 0 {
+		return priceTypes, nil
+	}
+	err := r.db.Where("id IN ?", ids).Find(&priceTypes).Error
+	return priceTypes, err
 }
 
 func (r *priceTypeRepo) List() ([]models.PriceType, error) {
