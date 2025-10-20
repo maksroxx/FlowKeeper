@@ -11,6 +11,7 @@ type ProductRepository interface {
 	GetByIDs(ids []uint) ([]models.Product, error)
 	List() ([]models.Product, error)
 	Update(p *models.Product) (*models.Product, error)
+	Patch(id uint, updates map[string]interface{}) (*models.Product, error)
 	Delete(id uint) error
 }
 
@@ -51,6 +52,13 @@ func (r *productRepo) List() ([]models.Product, error) {
 func (r *productRepo) Update(p *models.Product) (*models.Product, error) {
 	err := r.db.Save(p).Error
 	return p, err
+}
+
+func (r *productRepo) Patch(id uint, updates map[string]interface{}) (*models.Product, error) {
+	if err := r.db.Model(&models.Product{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	return r.GetByID(id)
 }
 
 func (r *productRepo) Delete(id uint) error {

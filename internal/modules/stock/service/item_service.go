@@ -1,6 +1,9 @@
 package service
 
 import (
+	"encoding/json"
+	"errors"
+
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/repository"
 )
@@ -10,7 +13,7 @@ type VariantService interface {
 	GetByID(id uint) (*models.Variant, error)
 	GetByIDAsDTO(id uint) (*models.VariantDTO, error)
 	List() ([]models.Variant, error)
-	Update(v *models.Variant) (*models.Variant, error)
+	Update(id uint, updates map[string]interface{}) (*models.Variant, error)
 	Delete(id uint) error
 	Search(filter models.VariantFilter) ([]models.VariantListItemDTO, error)
 }
@@ -52,8 +55,36 @@ func (s *variantService) List() ([]models.Variant, error) {
 	return s.repo.List()
 }
 
-func (s *variantService) Update(v *models.Variant) (*models.Variant, error) {
-	return s.repo.Update(v)
+// func (s *variantService) Update(id uint, updateData *models.Variant) (*models.Variant, error) {
+// 	variantToUpdate, err := s.repo.GetByID(id)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	if variantToUpdate == nil {
+// 		return nil, errors.New("variant not found to update")
+// 	}
+
+// 	variantToUpdate.SKU = updateData.SKU
+// 	variantToUpdate.UnitID = updateData.UnitID
+// 	variantToUpdate.Characteristics = updateData.Characteristics
+// 	variantToUpdate.ProductID = updateData.ProductID
+
+// 	return s.repo.Update(variantToUpdate)
+// }
+
+func (s *variantService) Update(id uint, updates map[string]interface{}) (*models.Variant, error) {
+	if _, ok := updates["product_id"]; ok {
+		delete(updates, "product_id")
+	}
+	if chars, ok := updates["characteristics"]; ok {
+		jsonBytes, err := json.Marshal(chars)
+		if err != nil {
+			return nil, errors.New("invalid format for characteristics")
+		}
+		updates["characteristics"] = string(jsonBytes)
+	}
+
+	return s.repo.Patch(id, updates)
 }
 
 func (s *variantService) Delete(id uint) error {

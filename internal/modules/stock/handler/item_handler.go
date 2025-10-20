@@ -10,11 +10,12 @@ import (
 )
 
 type VariantHandler struct {
-	service service.VariantService
+	service          service.VariantService
+	inventoryService service.InventoryService
 }
 
-func NewVariantHandler(s service.VariantService) *VariantHandler {
-	return &VariantHandler{service: s}
+func NewVariantHandler(s service.VariantService, inv service.InventoryService) *VariantHandler {
+	return &VariantHandler{service: s, inventoryService: inv}
 }
 
 func (h *VariantHandler) Register(r *gin.RouterGroup) {
@@ -26,6 +27,7 @@ func (h *VariantHandler) Register(r *gin.RouterGroup) {
 		grp.PUT("/:id", h.Update)
 		grp.DELETE("/:id", h.Delete)
 		grp.GET("", h.Search)
+		grp.GET("/:id/stock", h.GetStock)
 	}
 }
 
@@ -74,19 +76,25 @@ func (h *VariantHandler) GetByID(c *gin.Context) {
 }
 
 func (h *VariantHandler) Update(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	var v models.Variant
-	if err := c.ShouldBindJSON(&v); err != nil {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	var updates map[string]interface{}
+	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	v.ID = uint(id)
-	updated, err := h.service.Update(&v)
+
+	updatedVariant, err := h.service.Update(uint(id), updates)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, updated)
+
+	c.JSON(http.StatusOK, updatedVariant)
 }
 
 func (h *VariantHandler) Delete(c *gin.Context) {
@@ -138,4 +146,20 @@ func (h *VariantHandler) Search(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, variants)
+}
+
+func (h *VariantHandler) GetStock(c *gin.Context) {
+	variantID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Variant ID"})
+		return
+	}
+
+	stockLevels, err := h.inventoryService.GetStockByVariant(uint(variantID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, stockLevels)
 }

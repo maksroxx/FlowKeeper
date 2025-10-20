@@ -1,6 +1,10 @@
 package models
 
-import "github.com/shopspring/decimal"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type VariantFilter struct {
 	Name       *string
@@ -19,4 +23,27 @@ type StockFilter struct {
 	CategoryID *uint
 	SKU        *string
 	MinQty     *decimal.Decimal
+}
+
+type MovementFilter struct {
+	VariantID *uint
+	Limit     int
+	Offset    int
+}
+
+type DocumentFilter struct {
+	Search   *string
+	Status   *string
+	Types    []string
+	DateFrom *time.Time
+	DateTo   *time.Time
+
+	Limit  int
+	Offset int
+}
+
+type CounterpartyFilter struct {
+	Search *string
+	Limit  int
+	Offset int
 }

@@ -21,7 +21,7 @@ func (h *CounterpartyHandler) Register(r *gin.RouterGroup) {
 	grp := r.Group("/counterparties")
 	{
 		grp.POST("", h.Create)
-		grp.GET("", h.List)
+		grp.GET("", h.Search)
 		grp.GET("/:id", h.GetByID)
 		grp.PUT("/:id", h.Update)
 		grp.DELETE("/:id", h.Delete)
@@ -73,18 +73,18 @@ func (h *CounterpartyHandler) Update(c *gin.Context) {
 		return
 	}
 
-	var cp models.Counterparty
-	if err := c.ShouldBindJSON(&cp); err != nil {
+	var updates map[string]interface{}
+	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	cp.ID = uint(id)
 
-	updatedCounterparty, err := h.service.Update(&cp)
+	updatedCounterparty, err := h.service.Update(uint(id), updates)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(http.StatusOK, updatedCounterparty)
 }
 
@@ -94,9 +94,33 @@ func (h *CounterpartyHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
 		return
 	}
+
 	if err := h.service.Delete(uint(id)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.Status(http.StatusNoContent)
+}
+
+func (h *CounterpartyHandler) Search(c *gin.Context) {
+	var filter models.CounterpartyFilter
+
+	if search := c.Query("search"); search != "" {
+		filter.Search = &search
+	}
+
+	if limit, err := strconv.Atoi(c.DefaultQuery("limit", "50")); err == nil {
+		filter.Limit = limit
+	}
+	if offset, err := strconv.Atoi(c.DefaultQuery("offset", "0")); err == nil {
+		filter.Offset = offset
+	}
+
+	counterparties, err := h.service.Search(filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, counterparties)
 }

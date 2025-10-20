@@ -13,8 +13,10 @@ type VariantRepository interface {
 	GetByIDs(ids []uint) ([]models.Variant, error)
 	List() ([]models.Variant, error)
 	Update(v *models.Variant) (*models.Variant, error)
+	Patch(id uint, updates map[string]interface{}) (*models.Variant, error)
 	Delete(id uint) error
 	Search(filter models.VariantFilter) ([]models.VariantListItemDTO, error)
+	FindByProductID(productID uint) ([]models.Variant, error)
 }
 
 type variantRepo struct{ db *gorm.DB }
@@ -56,6 +58,13 @@ func (r *variantRepo) Update(v *models.Variant) (*models.Variant, error) {
 	return v, err
 }
 
+func (r *variantRepo) Patch(id uint, updates map[string]interface{}) (*models.Variant, error) {
+	if err := r.db.Model(&models.Variant{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	return r.GetByID(id)
+}
+
 func (r *variantRepo) Delete(id uint) error {
 	return r.db.Delete(&models.Variant{}, id).Error
 }
@@ -65,52 +74,85 @@ func (r *variantRepo) Search(filter models.VariantFilter) ([]models.VariantListI
 
 	query := r.db.Model(&models.Variant{})
 
-	selects := []string{
-		"variants.id",
-		"variants.product_id",
-		"products.name as product_name",
-		"variants.sku",
-		"variants.characteristics",
-		"variants.unit_id",
-		"units.name as unit_name",
-	}
-
-	query = query.Joins("JOIN products ON products.id = variants.product_id")
-	query = query.Joins("JOIN units ON units.id = variants.unit_id")
-
-	if filter.WarehouseID != nil {
-		selects = append(selects, "COALESCE(sb.quantity, 0) as quantity_on_stock")
-		query = query.Joins("LEFT JOIN stock_balances sb ON sb.item_id = variants.id AND sb.warehouse_id = ?", *filter.WarehouseID)
-		switch filter.StockStatus {
-		case "in_stock":
-			query = query.Where("sb.quantity > 0")
-		case "out_of_stock":
-			query = query.Where("sb.quantity IS NULL OR sb.quantity <= 0")
+	if filter.Name != nil || filter.CategoryID != nil {
+		query = query.Joins("JOIN products ON products.id = variants.product_id")
+		if filter.Name != nil {
+			searchPattern := "%" + strings.ToLower(*filter.Name) + "%"
+			query = query.Where("LOWER(products.name) LIKE ? OR LOWER(variants.sku) LIKE ?", searchPattern, searchPattern)
 		}
-	} else {
-		selects = append(selects, "0 as quantity_on_stock")
+		if filter.CategoryID != nil {
+			query = query.Where("products.category_id = ?", *filter.CategoryID)
+		}
 	}
-
-	query = query.Select(strings.Join(selects, ", "))
 
 	if filter.SKU != nil {
 		query = query.Where("LOWER(variants.sku) = LOWER(?)", *filter.SKU)
 	}
-	if filter.Name != nil {
-		searchPattern := "%" + strings.ToLower(*filter.Name) + "%"
-		query = query.Where("LOWER(products.name) LIKE ? OR LOWER(variants.sku) LIKE ?", searchPattern, searchPattern)
-	}
-	if filter.CategoryID != nil {
-		query = query.Where("products.category_id = ?", *filter.CategoryID)
+
+	if filter.StockStatus != "all" {
+		if filter.WarehouseID != nil {
+			switch filter.StockStatus {
+			case "in_stock":
+				query = query.Where("EXISTS (SELECT 1 FROM stock_balances sb WHERE sb.item_id = variants.id AND sb.warehouse_id = ? AND sb.quantity > 0)", *filter.WarehouseID)
+			case "out_of_stock":
+				query = query.Where("NOT EXISTS (SELECT 1 FROM stock_balances sb WHERE sb.item_id = variants.id AND sb.warehouse_id = ? AND sb.quantity > 0)", *filter.WarehouseID)
+			}
+		} else {
+			switch filter.StockStatus {
+			case "in_stock":
+				query = query.Where("EXISTS (SELECT 1 FROM stock_balances sb WHERE sb.item_id = variants.id AND sb.quantity > 0)")
+			case "out_of_stock":
+				query = query.Where("NOT EXISTS (SELECT 1 FROM stock_balances sb WHERE sb.item_id = variants.id AND sb.quantity > 0)")
+			}
+		}
 	}
 
-	if filter.Limit > 0 {
-		query = query.Limit(filter.Limit)
+	var variantIDs []uint
+	err := query.Order("variants.id asc").
+		Limit(filter.Limit).
+		Offset(filter.Offset).
+		Pluck("variants.id", &variantIDs).Error
+
+	if err != nil {
+		return nil, err
 	}
-	if filter.Offset > 0 {
-		query = query.Offset(filter.Offset)
+	if len(variantIDs) == 0 {
+		return []models.VariantListItemDTO{}, nil
 	}
 
-	err := query.Order("variants.id asc").Scan(&results).Error
+	selects := []string{
+		"variants.id", "variants.product_id", "products.name as product_name",
+		"variants.sku", "variants.characteristics", "variants.unit_id", "units.name as unit_name",
+		"products.category_id", "categories.name as category_name",
+	}
+
+	enrichQuery := r.db.Model(&models.Variant{}).
+		Joins("JOIN products ON products.id = variants.product_id").
+		Joins("JOIN units ON units.id = variants.unit_id").
+		Joins("JOIN categories ON categories.id = products.category_id").
+		Where("variants.id IN ?", variantIDs)
+
+	if filter.WarehouseID != nil {
+		selects = append(selects, "COALESCE(sb.quantity, 0) as quantity_on_stock")
+		enrichQuery = enrichQuery.Joins(
+			"LEFT JOIN stock_balances sb ON sb.item_id = variants.id AND sb.warehouse_id = ?", *filter.WarehouseID,
+		)
+	} else {
+		selects = append(selects, `
+			(SELECT COALESCE(SUM(sb.quantity), 0) 
+			 FROM stock_balances sb 
+			 WHERE sb.item_id = variants.id) as quantity_on_stock
+		`)
+	}
+
+	enrichQuery = enrichQuery.Select(strings.Join(selects, ", "))
+	err = enrichQuery.Order("variants.id asc").Scan(&results).Error
+
 	return results, err
+}
+
+func (r *variantRepo) FindByProductID(productID uint) ([]models.Variant, error) {
+	var variants []models.Variant
+	err := r.db.Where("product_id = ?", productID).Order("id asc").Find(&variants).Error
+	return variants, err
 }

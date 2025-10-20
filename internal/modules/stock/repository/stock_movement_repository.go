@@ -16,6 +16,8 @@ type StockMovementRepository interface {
 
 	ListByDocument(docID uint) ([]stock.StockMovement, error)
 	ListByDocumentWithTx(tx *gorm.DB, docID uint) ([]stock.StockMovement, error)
+
+	Search(filter stock.MovementFilter) ([]stock.StockMovement, error)
 }
 
 type movementRepo struct {
@@ -84,4 +86,25 @@ func (r *movementRepo) ListByDocumentWithTx(tx *gorm.DB, docID uint) ([]stock.St
 		return nil, err
 	}
 	return ms, nil
+}
+
+func (r *movementRepo) Search(filter stock.MovementFilter) ([]stock.StockMovement, error) {
+	var movements []stock.StockMovement
+
+	query := r.db.Model(&stock.StockMovement{})
+
+	if filter.VariantID != nil {
+		query = query.Where("item_id = ?", *filter.VariantID)
+	}
+
+	if filter.Limit > 0 {
+		query = query.Limit(filter.Limit)
+	}
+	if filter.Offset > 0 {
+		query = query.Offset(filter.Offset)
+	}
+
+	err := query.Order("created_at desc").Find(&movements).Error
+
+	return movements, err
 }

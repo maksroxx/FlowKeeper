@@ -20,6 +20,8 @@ type VariantListItemDTO struct {
 	ID              uint               `json:"id"`
 	ProductID       uint               `json:"product_id"`
 	ProductName     string             `json:"product_name"`
+	CategoryID      uint               `json:"category_id"`
+	CategoryName    string             `json:"category_name"`
 	SKU             string             `json:"sku"`
 	Characteristics CharacteristicsMap `json:"characteristics"`
 	UnitID          uint               `json:"unit_id"`
@@ -49,12 +51,14 @@ type DocumentDTO struct {
 }
 
 type DocumentItemDTO struct {
-	ID          uint             `json:"id"`
-	VariantID   uint             `json:"variant_id"`
-	VariantSKU  string           `json:"variant_sku"`
-	ProductName string           `json:"product_name"`
-	Quantity    decimal.Decimal  `json:"quantity"`
-	Price       *decimal.Decimal `json:"price,omitempty"`
+	ID           uint             `json:"id"`
+	VariantID    uint             `json:"variant_id"`
+	VariantSKU   string           `json:"variant_sku"`
+	ProductName  string           `json:"product_name"`
+	CategoryID   uint             `json:"category_id"`
+	CategoryName string           `json:"category_name"`
+	Quantity     decimal.Decimal  `json:"quantity"`
+	Price        *decimal.Decimal `json:"price,omitempty"`
 }
 
 type DocumentListItemDTO struct {
@@ -63,6 +67,7 @@ type DocumentListItemDTO struct {
 	Number           string    `json:"number"`
 	WarehouseName    string    `json:"warehouse_name,omitempty"`
 	CounterpartyName string    `json:"counterparty_name,omitempty"`
+	ItemCount        int       `json:"item_count"`
 	Status           string    `json:"status"`
 	CreatedAt        time.Time `json:"created_at"`
 }
@@ -82,11 +87,43 @@ type StockMovementDTO struct {
 }
 
 type StockBalanceDTO struct {
-	ID          uint            `json:"id"`
-	WarehouseID uint            `json:"warehouse_id"`
-	VariantID   uint            `json:"variant_id"`
-	VariantSKU  string          `json:"variant_sku"`
-	ProductName string          `json:"product_name"`
-	UnitName    string          `json:"unit_name"`
-	Quantity    decimal.Decimal `json:"quantity"`
+	ID           uint            `json:"id"`
+	WarehouseID  uint            `json:"warehouse_id"`
+	VariantID    uint            `json:"variant_id"`
+	VariantSKU   string          `json:"variant_sku"`
+	ProductName  string          `json:"product_name"`
+	CategoryID   uint            `json:"category_id"`
+	CategoryName string          `json:"category_name"`
+	UnitName     string          `json:"unit_name"`
+	Quantity     decimal.Decimal `json:"quantity"`
+}
+
+type CharacteristicValueDTO struct {
+	ID    uint   `json:"id"`
+	Value string `json:"value"`
+}
+
+type CharacteristicTreeDTO struct {
+	ID     uint                     `json:"id"`
+	Name   string                   `json:"name"`
+	Values []CharacteristicValueDTO `json:"values"`
+}
+
+type ProductOptionDTO struct {
+	Type   string   `json:"type"`
+	Values []string `json:"values"`
+}
+
+type ProductDetailDTO struct {
+	Product  Product            `json:"product"`
+	Variants []Variant          `json:"variants"`
+	Options  []ProductOptionDTO `json:"options"`
+}
+
+type VariantStockDTO struct {
+	WarehouseID   uint            `json:"warehouse_id"`
+	WarehouseName string          `json:"warehouse_name"`
+	OnHand        decimal.Decimal `json:"on_hand"`
+	Reserved      decimal.Decimal `json:"reserved"`
+	Available     decimal.Decimal `json:"available"`
 }

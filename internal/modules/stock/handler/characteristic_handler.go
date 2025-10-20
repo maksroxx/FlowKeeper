@@ -20,6 +20,8 @@ func NewCharacteristicHandler(s service.CharacteristicService) *CharacteristicHa
 func (h *CharacteristicHandler) Register(r *gin.RouterGroup) {
 	grp := r.Group("/characteristics")
 	{
+		grp.GET("/tree", h.GetTree)
+
 		// Роуты для типов характеристик
 		types := grp.Group("/types")
 		types.POST("", h.CreateType)
@@ -152,4 +154,13 @@ func (h *CharacteristicHandler) DeleteValue(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+func (h *CharacteristicHandler) GetTree(c *gin.Context) {
+	tree, err := h.service.GetTree()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, tree)
 }

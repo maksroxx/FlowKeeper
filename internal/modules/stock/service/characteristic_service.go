@@ -6,6 +6,8 @@ import (
 )
 
 type CharacteristicService interface {
+	GetTree() ([]models.CharacteristicTreeDTO, error)
+
 	CreateType(ct *models.CharacteristicType) (*models.CharacteristicType, error)
 	GetTypeByID(id uint) (*models.CharacteristicType, error)
 	ListTypes() ([]models.CharacteristicType, error)
@@ -56,7 +58,7 @@ func (s *characteristicService) GetValueByID(id uint) (*models.CharacteristicVal
 }
 
 func (s *characteristicService) ListValues() ([]models.CharacteristicValue, error) {
-	return s.repo.ListValues()
+	return s.repo.ListValues(nil)
 }
 
 func (s *characteristicService) UpdateValue(cv *models.CharacteristicValue) (*models.CharacteristicValue, error) {
@@ -65,4 +67,39 @@ func (s *characteristicService) UpdateValue(cv *models.CharacteristicValue) (*mo
 
 func (s *characteristicService) DeleteValue(id uint) error {
 	return s.repo.DeleteValue(id)
+}
+
+func (s *characteristicService) GetTree() ([]models.CharacteristicTreeDTO, error) {
+	types, err := s.repo.ListTypes()
+	if err != nil {
+		return nil, err
+	}
+	if len(types) == 0 {
+		return []models.CharacteristicTreeDTO{}, nil
+	}
+
+	values, err := s.repo.ListValues(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	valuesMap := make(map[uint][]models.CharacteristicValueDTO)
+	for _, v := range values {
+		dto := models.CharacteristicValueDTO{ID: v.ID, Value: v.Value}
+		valuesMap[v.CharacteristicTypeID] = append(valuesMap[v.CharacteristicTypeID], dto)
+	}
+
+	tree := make([]models.CharacteristicTreeDTO, len(types))
+	for i, t := range types {
+		vals := valuesMap[t.ID]
+		if vals == nil {
+			vals = []models.CharacteristicValueDTO{}
+		}
+		tree[i] = models.CharacteristicTreeDTO{
+			ID:     t.ID,
+			Name:   t.Name,
+			Values: vals,
+		}
+	}
+	return tree, nil
 }

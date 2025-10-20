@@ -14,7 +14,7 @@ type CharacteristicRepository interface {
 
 	CreateValue(cv *models.CharacteristicValue) (*models.CharacteristicValue, error)
 	GetValueByID(id uint) (*models.CharacteristicValue, error)
-	ListValues() ([]models.CharacteristicValue, error)
+	ListValues(typeID *uint) ([]models.CharacteristicValue, error)
 	UpdateValue(cv *models.CharacteristicValue) (*models.CharacteristicValue, error)
 	DeleteValue(id uint) error
 }
@@ -66,9 +66,13 @@ func (r *characteristicRepo) GetValueByID(id uint) (*models.CharacteristicValue,
 	return &cv, nil
 }
 
-func (r *characteristicRepo) ListValues() ([]models.CharacteristicValue, error) {
+func (r *characteristicRepo) ListValues(typeID *uint) ([]models.CharacteristicValue, error) {
 	var cvs []models.CharacteristicValue
-	err := r.db.Find(&cvs).Error
+	query := r.db
+	if typeID != nil {
+		query = query.Where("characteristic_type_id = ?", *typeID)
+	}
+	err := query.Find(&cvs).Error
 	return cvs, err
 }
 

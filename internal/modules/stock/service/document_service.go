@@ -20,6 +20,8 @@ type DocumentService interface {
 	ListAsDTO(status string) ([]models.DocumentListItemDTO, error)
 	Update(id uint, updateData *models.Document) (*models.Document, error)
 	Delete(id uint) error
+
+	SearchAsDTO(filter models.DocumentFilter) ([]models.DocumentListItemDTO, error)
 }
 
 type documentService struct {
@@ -200,12 +202,80 @@ func (s *documentService) ListAsDTO(status string) ([]models.DocumentListItemDTO
 		if doc.CounterpartyID != nil {
 			cpName = cpMap[*doc.CounterpartyID]
 		}
+
 		dtos[i] = models.DocumentListItemDTO{
-			ID: doc.ID, Type: doc.Type, Number: doc.Number,
-			WarehouseName: whName, CounterpartyName: cpName,
-			Status: doc.Status, CreatedAt: doc.CreatedAt,
+			ID:               doc.ID,
+			Type:             doc.Type,
+			Number:           doc.Number,
+			WarehouseName:    whName,
+			CounterpartyName: cpName,
+			ItemCount:        len(doc.Items),
+			Status:           doc.Status,
+			CreatedAt:        doc.CreatedAt,
 		}
 	}
+
+	return dtos, nil
+}
+
+func (s *documentService) SearchAsDTO(filter models.DocumentFilter) ([]models.DocumentListItemDTO, error) {
+	if filter.Limit == 0 {
+		filter.Limit = 50
+	}
+
+	docs, err := s.repo.Search(filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search documents: %w", err)
+	}
+
+	if len(docs) == 0 {
+		return []models.DocumentListItemDTO{}, nil
+	}
+
+	warehouseIDs := make(map[uint]bool)
+	counterpartyIDs := make(map[uint]bool)
+
+	for _, doc := range docs {
+		if doc.WarehouseID != nil {
+			warehouseIDs[*doc.WarehouseID] = true
+		}
+		if doc.CounterpartyID != nil {
+			counterpartyIDs[*doc.CounterpartyID] = true
+		}
+	}
+
+	whMap, err := s.loadWarehouseMap(mapKeysToSlice(warehouseIDs))
+	if err != nil {
+		return nil, err
+	}
+
+	cpMap, err := s.loadCounterpartyMap(mapKeysToSlice(counterpartyIDs))
+	if err != nil {
+		return nil, err
+	}
+
+	dtos := make([]models.DocumentListItemDTO, len(docs))
+	for i, doc := range docs {
+		var whName, cpName string
+		if doc.WarehouseID != nil {
+			whName = whMap[*doc.WarehouseID]
+		}
+		if doc.CounterpartyID != nil {
+			cpName = cpMap[*doc.CounterpartyID]
+		}
+
+		dtos[i] = models.DocumentListItemDTO{
+			ID:               doc.ID,
+			Type:             doc.Type,
+			Number:           doc.Number,
+			WarehouseName:    whName,
+			CounterpartyName: cpName,
+			ItemCount:        len(doc.Items),
+			Status:           doc.Status,
+			CreatedAt:        doc.CreatedAt,
+		}
+	}
+
 	return dtos, nil
 }
 

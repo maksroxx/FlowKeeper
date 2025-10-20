@@ -8,6 +8,7 @@ import (
 type CategoryRepository interface {
 	Create(c *stock.Category) (*stock.Category, error)
 	GetByID(id uint) (*stock.Category, error)
+	GetByIDs(ids []uint) ([]stock.Category, error)
 	List() ([]stock.Category, error)
 	Update(c *stock.Category) (*stock.Category, error)
 	Delete(id uint) error
@@ -28,6 +29,15 @@ func (r *categoryRepo) GetByID(id uint) (*stock.Category, error) {
 		return nil, err
 	}
 	return &cat, nil
+}
+
+func (r *categoryRepo) GetByIDs(ids []uint) ([]stock.Category, error) {
+	var categories []stock.Category
+	if len(ids) == 0 {
+		return categories, nil
+	}
+	err := r.db.Where("id IN ?", ids).Find(&categories).Error
+	return categories, err
 }
 
 func (r *categoryRepo) List() ([]stock.Category, error) {

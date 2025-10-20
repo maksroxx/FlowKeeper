@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/models"
@@ -47,9 +48,43 @@ func (h *DocumentHandler) Create(c *gin.Context) {
 }
 
 func (h *DocumentHandler) List(c *gin.Context) {
-	status := c.Query("status")
+	var filter models.DocumentFilter
 
-	docDTOs, err := h.service.ListAsDTO(status)
+	if status := c.Query("status"); status != "" {
+		filter.Status = &status
+	}
+
+	if search := c.Query("search"); search != "" {
+		filter.Search = &search
+	}
+
+	if types := c.QueryArray("types"); len(types) > 0 {
+		filter.Types = types
+	}
+
+	if dateFromStr := c.Query("date_from"); dateFromStr != "" {
+		if t, err := time.Parse(time.RFC3339, dateFromStr); err == nil {
+			filter.DateFrom = &t
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date_from format, use RFC3339"})
+			return
+		}
+	}
+
+	if dateToStr := c.Query("date_to"); dateToStr != "" {
+		if t, err := time.Parse(time.RFC3339, dateToStr); err == nil {
+			filter.DateTo = &t
+		}
+	}
+
+	if limit, err := strconv.Atoi(c.DefaultQuery("limit", "50")); err == nil {
+		filter.Limit = limit
+	}
+	if offset, err := strconv.Atoi(c.Query("offset")); err == nil {
+		filter.Offset = offset
+	}
+
+	docDTOs, err := h.service.SearchAsDTO(filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

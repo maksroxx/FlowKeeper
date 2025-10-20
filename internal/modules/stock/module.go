@@ -47,7 +47,7 @@ func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	lotRepo := repository.NewLotRepository()
 
 	// --- services ---
-	productSvc := service.NewProductService(productRepo)
+	productSvc := service.NewProductService(productRepo, variantRepo)
 	variantSvc := service.NewVariantService(variantRepo, productRepo, unitRepo)
 	charactSvc := service.NewCharacteristicService(charactRepo)
 	priceTypeSvc := service.NewPriceTypeService(priceTypeRepo)
@@ -56,7 +56,7 @@ func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	catSvc := service.NewCategoryService(catRepo)
 	cpSvc := service.NewCounterpartyService(cpRepo)
 	strategyFactory := service.NewStrategyFactory(balanceRepo, movRepo, lotRepo)
-	inventorySvc := service.NewInventoryService(strategyFactory, reservRepo, balanceRepo, stockCfg, variantRepo, productRepo, unitRepo)
+	inventorySvc := service.NewInventoryService(strategyFactory, reservRepo, balanceRepo, stockCfg, variantRepo, productRepo, unitRepo, catRepo, whRepo)
 	docSvc := service.NewDocumentService(
 		docRepo, historyRepo,
 		inventorySvc, priceSvc,
@@ -72,7 +72,7 @@ func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	// --- handlers ---
 	handler.NewProductHandler(productSvc).Register(grp)
 	handler.NewCharacteristicHandler(charactSvc).Register(grp)
-	handler.NewVariantHandler(variantSvc).Register(grp)
+	handler.NewVariantHandler(variantSvc, inventorySvc).Register(grp)
 	handler.NewPriceTypeHandler(priceTypeSvc).Register(grp)
 	handler.NewPriceHandler(priceSvc).Register(grp)
 	handler.NewCategoryHandler(catSvc).Register(grp)

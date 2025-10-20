@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"strings"
+
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -22,6 +24,8 @@ type DocumentRepository interface {
 	GetByIDWithTx(tx *gorm.DB, id uint) (*stock.Document, error)
 
 	GetByIDs(ids []uint) ([]stock.Document, error)
+
+	Search(filter stock.DocumentFilter) ([]stock.Document, error)
 }
 
 type documentRepo struct {
@@ -128,4 +132,40 @@ func (r *documentRepo) GetByIDs(ids []uint) ([]stock.Document, error) {
 	}
 	err := r.db.Where("id IN ?", ids).Find(&documents).Error
 	return documents, err
+}
+
+func (r *documentRepo) Search(filter stock.DocumentFilter) ([]stock.Document, error) {
+	var docs []stock.Document
+	query := r.db.Model(&stock.Document{}).Preload("Items")
+
+	if filter.Status != nil {
+		query = query.Where("status = ?", *filter.Status)
+	}
+
+	if len(filter.Types) > 0 {
+		query = query.Where("type IN ?", filter.Types)
+	}
+
+	if filter.DateFrom != nil {
+		query = query.Where("created_at >= ?", *filter.DateFrom)
+	}
+
+	if filter.DateTo != nil {
+		query = query.Where("created_at <= ?", *filter.DateTo)
+	}
+
+	if filter.Search != nil {
+		searchPattern := "%" + strings.ToLower(*filter.Search) + "%"
+		query = query.Where("LOWER(number) LIKE ? OR LOWER(comment) LIKE ?", searchPattern, searchPattern)
+	}
+
+	if filter.Limit > 0 {
+		query = query.Limit(filter.Limit)
+	}
+	if filter.Offset > 0 {
+		query = query.Offset(filter.Offset)
+	}
+
+	err := query.Order("created_at desc").Find(&docs).Error
+	return docs, err
 }

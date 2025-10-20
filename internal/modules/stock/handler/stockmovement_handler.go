@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/service"
 )
 
@@ -19,8 +20,9 @@ func NewMovementHandler(s service.StockMovementService) *MovementHandler {
 func (h *MovementHandler) Register(r *gin.RouterGroup) {
 	grp := r.Group("/movements")
 	{
-		grp.GET("", h.List)
+		// grp.GET("", h.List)
 		grp.GET("/:id", h.GetByID)
+		grp.GET("", h.Search)
 	}
 }
 
@@ -45,4 +47,29 @@ func (h *MovementHandler) GetByID(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, movement)
+}
+
+func (h *MovementHandler) Search(c *gin.Context) {
+	var filter models.MovementFilter
+
+	if variantIDStr := c.Query("variant_id"); variantIDStr != "" {
+		if id, err := strconv.ParseUint(variantIDStr, 10, 64); err == nil {
+			idUint := uint(id)
+			filter.VariantID = &idUint
+		}
+	}
+
+	if limit, err := strconv.Atoi(c.DefaultQuery("limit", "20")); err == nil {
+		filter.Limit = limit
+	}
+	if offset, err := strconv.Atoi(c.DefaultQuery("offset", "0")); err == nil {
+		filter.Offset = offset
+	}
+
+	movementDTOs, err := h.service.SearchAsDTO(filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, movementDTOs)
 }

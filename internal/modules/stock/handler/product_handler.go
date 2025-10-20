@@ -25,6 +25,7 @@ func (h *ProductHandler) Register(r *gin.RouterGroup) {
 		grp.GET("/:id", h.GetByID)
 		grp.PUT("/:id", h.Update)
 		grp.DELETE("/:id", h.Delete)
+		grp.GET("/:id/options", h.GetProductOptions)
 	}
 }
 
@@ -73,19 +74,19 @@ func (h *ProductHandler) Update(c *gin.Context) {
 		return
 	}
 
-	var p models.Product
-	if err := c.ShouldBindJSON(&p); err != nil {
+	var updates map[string]interface{}
+	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	p.ID = uint(id)
 
-	updated, err := h.service.Update(&p)
+	updatedProduct, err := h.service.Update(uint(id), updates)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, updated)
+
+	c.JSON(http.StatusOK, updatedProduct)
 }
 
 func (h *ProductHandler) Delete(c *gin.Context) {
@@ -100,4 +101,20 @@ func (h *ProductHandler) Delete(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+func (h *ProductHandler) GetProductOptions(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	details, err := h.service.GetProductDetails(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, details)
 }
