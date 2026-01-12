@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"gorm.io/gorm"
@@ -18,7 +19,7 @@ type DocumentService interface {
 	GetByID(id uint) (*models.Document, error)
 	GetByIDAsDTO(id uint) (*models.DocumentDTO, error)
 	ListAsDTO(status string) ([]models.DocumentListItemDTO, error)
-	Update(id uint, updateData *models.Document) (*models.Document, error)
+	Update(id uint, updatePayload *models.DocumentUpdateDTO) (*models.DocumentDTO, error)
 	Delete(id uint) error
 
 	SearchAsDTO(filter models.DocumentFilter) ([]models.DocumentListItemDTO, error)
@@ -52,7 +53,7 @@ func NewDocumentService(
 }
 
 func (s *documentService) Post(id uint) error {
-	return s.tx.DoInTx(func(tx *gorm.DB) error {
+	err := s.tx.DoInTx(func(tx *gorm.DB) error {
 		doc, err := s.repo.GetByIDWithTx(tx, id)
 		if err != nil {
 			return err
@@ -90,6 +91,11 @@ func (s *documentService) Post(id uint) error {
 		h := &models.DocumentHistory{DocumentID: doc.ID, Action: "posted", CreatedAt: now, CreatedBy: doc.CreatedBy}
 		return s.historyRepo.CreateWithTx(tx, h)
 	})
+	if err != nil {
+		log.Printf("[ERROR] Failed to post document ID=%d: %v", id, err)
+		return err
+	}
+	return nil
 }
 
 func (s *documentService) Cancel(id uint) error {
@@ -140,16 +146,44 @@ func (s *documentService) Create(doc *models.Document) (*models.Document, error)
 
 func (s *documentService) GetByID(id uint) (*models.Document, error) { return s.repo.GetByID(id) }
 
-func (s *documentService) Update(id uint, updateData *models.Document) (*models.Document, error) {
-	doc, err := s.repo.GetByID(id)
+func (s *documentService) Update(id uint, updatePayload *models.DocumentUpdateDTO) (*models.DocumentDTO, error) {
+	var finalDoc *models.Document
+
+	err := s.tx.DoInTx(func(tx *gorm.DB) error {
+		docToUpdate, err := s.repo.GetByIDWithTx(tx, id)
+		if err != nil {
+			return err
+		}
+		if docToUpdate == nil {
+			return errors.New("document not found")
+		}
+
+		if docToUpdate.Status != "draft" {
+			return errors.New("only draft documents can be edited")
+		}
+
+		docToUpdate.WarehouseID = updatePayload.WarehouseID
+		docToUpdate.CounterpartyID = updatePayload.CounterpartyID
+		docToUpdate.Comment = updatePayload.Comment
+
+		if err := tx.Where("document_id = ?", docToUpdate.ID).Delete(&models.DocumentItem{}).Error; err != nil {
+			return fmt.Errorf("failed to delete old document items: %w", err)
+		}
+
+		docToUpdate.Items = updatePayload.Items
+
+		if err := tx.Session(&gorm.Session{FullSaveAssociations: true}).Save(docToUpdate).Error; err != nil {
+			return fmt.Errorf("failed to save updated document: %w", err)
+		}
+
+		finalDoc = docToUpdate
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	if doc == nil {
-		return nil, errors.New("document not found to update")
-	}
-	doc.Comment = updateData.Comment
-	return s.repo.Update(doc)
+
+	return s.buildDTO(finalDoc)
 }
 
 func (s *documentService) Delete(id uint) error { return s.repo.Delete(id) }

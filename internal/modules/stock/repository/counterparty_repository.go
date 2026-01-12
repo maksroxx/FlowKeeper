@@ -67,9 +67,10 @@ func (r *counterpartyRepository) Search(filter stock.CounterpartyFilter) ([]stoc
 
 	if filter.Search != nil && *filter.Search != "" {
 		searchPattern := "%" + strings.ToLower(*filter.Search) + "%"
+
 		query = query.Where(
-			"LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(phone) LIKE ?",
-			searchPattern, searchPattern, searchPattern,
+			"LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(phone) LIKE ? OR LOWER(telegram) LIKE ?",
+			searchPattern, searchPattern, searchPattern, searchPattern,
 		)
 	}
 

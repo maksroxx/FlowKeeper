@@ -5,7 +5,6 @@ import (
 	"net/mail"
 	"strings"
 
-	"github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 	stock "github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/repository"
 )
@@ -35,7 +34,7 @@ func (s *counterpartyService) GetByID(id uint) (*stock.Counterparty, error) {
 	return s.repo.GetByID(id)
 }
 func (s *counterpartyService) List() ([]stock.Counterparty, error) { return s.repo.List() }
-func (s *counterpartyService) Update(id uint, updates map[string]interface{}) (*models.Counterparty, error) {
+func (s *counterpartyService) Update(id uint, updates map[string]interface{}) (*stock.Counterparty, error) {
 	delete(updates, "id")
 	delete(updates, "created_at")
 	delete(updates, "updated_at")

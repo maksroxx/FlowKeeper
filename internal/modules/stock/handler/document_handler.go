@@ -114,19 +114,13 @@ func (h *DocumentHandler) Update(c *gin.Context) {
 		return
 	}
 
-	var updatePayload struct {
-		Comment string `json:"comment"`
-	}
+	var updatePayload models.DocumentUpdateDTO
 	if err := c.ShouldBindJSON(&updatePayload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	docToUpdate := &models.Document{
-		Comment: updatePayload.Comment,
-	}
-
-	updatedDoc, err := h.service.Update(uint(id), docToUpdate)
+	updatedDoc, err := h.service.Update(uint(id), &updatePayload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -72,6 +72,13 @@ type DocumentListItemDTO struct {
 	CreatedAt        time.Time `json:"created_at"`
 }
 
+type DocumentUpdateDTO struct {
+	WarehouseID    *uint          `json:"warehouse_id"`
+	CounterpartyID *uint          `json:"counterparty_id"`
+	Comment        string         `json:"comment"`
+	Items          []DocumentItem `json:"items"`
+}
+
 type StockMovementDTO struct {
 	ID             uint            `json:"id"`
 	DocumentID     *uint           `json:"document_id"`
