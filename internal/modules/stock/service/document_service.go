@@ -164,6 +164,7 @@ func (s *documentService) Update(id uint, updatePayload *models.DocumentUpdateDT
 
 		docToUpdate.WarehouseID = updatePayload.WarehouseID
 		docToUpdate.CounterpartyID = updatePayload.CounterpartyID
+		docToUpdate.PriceTypeID = updatePayload.PriceTypeID
 		docToUpdate.Comment = updatePayload.Comment
 
 		if err := tx.Where("document_id = ?", docToUpdate.ID).Delete(&models.DocumentItem{}).Error; err != nil {

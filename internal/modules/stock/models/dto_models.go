@@ -75,6 +75,7 @@ type DocumentListItemDTO struct {
 type DocumentUpdateDTO struct {
 	WarehouseID    *uint          `json:"warehouse_id"`
 	CounterpartyID *uint          `json:"counterparty_id"`
+	PriceTypeID    *uint          `json:"price_type_id"`
 	Comment        string         `json:"comment"`
 	Items          []DocumentItem `json:"items"`
 }

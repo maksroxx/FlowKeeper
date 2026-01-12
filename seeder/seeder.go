@@ -87,7 +87,7 @@ func newSeeder(db *gorm.DB) *seeder {
 		panic(fmt.Sprintf("failed to load stock module config: %v", err))
 	}
 
-	strategyFactory := service.NewStrategyFactory(balanceRepo, movementRepo, lotRepo)
+	strategyFactory := service.NewStrategyFactory(balanceRepo, movementRepo, lotRepo, variantRepo, productRepo)
 
 	inventorySvc := service.NewInventoryService(
 		strategyFactory,
@@ -102,7 +102,7 @@ func newSeeder(db *gorm.DB) *seeder {
 	)
 
 	priceSvc := service.NewPriceService(priceRepo)
-	seqSvc := service.NewSequenceService(seqRepo, txManager)
+	seqSvc := service.NewSequenceService(seqRepo, docRepo, txManager)
 	unitSvc := service.NewUnitService(unitRepo)
 	productSvc := service.NewProductService(productRepo, variantRepo)
 	variantSvc := service.NewVariantService(variantRepo, productRepo, unitRepo)

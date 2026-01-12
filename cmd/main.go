@@ -12,6 +12,7 @@ import (
 	"github.com/maksroxx/flowkeeper/internal/config"
 	"github.com/maksroxx/flowkeeper/internal/core"
 	"github.com/maksroxx/flowkeeper/internal/db"
+	"github.com/maksroxx/flowkeeper/internal/modules/analytics"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock"
 )
 
@@ -29,21 +30,13 @@ func main() {
 	r := gin.Default()
 	r.RedirectTrailingSlash = true
 	config := cors.DefaultConfig()
-	// Разрешаем все методы
 	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
-	// Разрешаем все заголовки
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
-	// Разрешаем передачу cookie и токенов
 	config.AllowCredentials = true
-	// Устанавливаем время кеширования
 	config.MaxAge = 12 * time.Hour
-
-	// САМАЯ ВАЖНАЯ ЧАСТЬ: Разрешаем любой origin.
-	// Вместо AllowOrigins = []string{"*"}, что несовместимо с Credentials,
-	// мы используем функцию, которая проверяет и разрешает любой источник.
 	config.AllowOriginFunc = func(origin string) bool {
 		_, err := url.Parse(origin)
-		return err == nil // Если origin - это валидный URL, разрешаем его.
+		return err == nil
 	}
 
 	r.Use(cors.New(config))
@@ -51,6 +44,10 @@ func main() {
 
 	if cfg.Modules.Stock {
 		app.RegisterModule(stock.NewModule())
+	}
+
+	if cfg.Modules.Analytics {
+		app.RegisterModule(analytics.NewModule())
 	}
 
 	// if cfg.Modules.Users {

@@ -52,10 +52,10 @@ func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	charactSvc := service.NewCharacteristicService(charactRepo)
 	priceTypeSvc := service.NewPriceTypeService(priceTypeRepo)
 	priceSvc := service.NewPriceService(priceRepo)
-	seqSvc := service.NewSequenceService(seqRepo, txManager)
+	seqSvc := service.NewSequenceService(seqRepo, docRepo, txManager)
 	catSvc := service.NewCategoryService(catRepo)
 	cpSvc := service.NewCounterpartyService(cpRepo)
-	strategyFactory := service.NewStrategyFactory(balanceRepo, movRepo, lotRepo)
+	strategyFactory := service.NewStrategyFactory(balanceRepo, movRepo, lotRepo, variantRepo, productRepo)
 	inventorySvc := service.NewInventoryService(strategyFactory, reservRepo, balanceRepo, stockCfg, variantRepo, productRepo, unitRepo, catRepo, whRepo)
 	docSvc := service.NewDocumentService(
 		docRepo, historyRepo,

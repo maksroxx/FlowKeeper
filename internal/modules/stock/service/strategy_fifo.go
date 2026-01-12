@@ -16,10 +16,24 @@ type FifoQuantityStrategy struct {
 	lotRepo      repository.LotRepository
 	movementRepo repository.StockMovementRepository
 	balanceRepo  repository.BalanceRepository
+	variantRepo  repository.VariantRepository
+	productRepo  repository.ProductRepository
 }
 
-func NewFifoQuantityStrategy(l repository.LotRepository, m repository.StockMovementRepository, b repository.BalanceRepository) QuantityStrategy {
-	return &FifoQuantityStrategy{lotRepo: l, movementRepo: m, balanceRepo: b}
+func NewFifoQuantityStrategy(
+	l repository.LotRepository,
+	m repository.StockMovementRepository,
+	b repository.BalanceRepository,
+	v repository.VariantRepository,
+	p repository.ProductRepository,
+) QuantityStrategy {
+	return &FifoQuantityStrategy{
+		lotRepo:      l,
+		movementRepo: m,
+		balanceRepo:  b,
+		variantRepo:  v,
+		productRepo:  p,
+	}
 }
 
 func (s *FifoQuantityStrategy) ProcessIncome(tx *gorm.DB, doc *models.Document, cfg *config.Config) error {
@@ -64,7 +78,17 @@ func (s *FifoQuantityStrategy) ProcessOutcome(tx *gorm.DB, doc *models.Document,
 		}
 
 		if !cfg.AllowNegativeStock && totalQtyInLots.LessThan(it.Quantity) {
-			return fmt.Errorf("not enough stock for variant %d: have=%s, need=%s", it.VariantID, totalQtyInLots.String(), it.Quantity.String())
+			variant, _ := s.variantRepo.GetByID(it.VariantID)
+			productName := "Unknown"
+			sku := "?"
+			if variant != nil {
+				sku = variant.SKU
+				if p, _ := s.productRepo.GetByID(variant.ProductID); p != nil {
+					productName = p.Name
+				}
+			}
+			return fmt.Errorf("Недостаточно товара '%s' (%s). В наличии: %s, Нужно: %s",
+				productName, sku, totalQtyInLots.String(), it.Quantity.String())
 		}
 
 		qtyToShip := it.Quantity

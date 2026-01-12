@@ -20,17 +20,32 @@ type strategyFactoryImpl struct {
 	balanceRepo  repository.BalanceRepository
 	movementRepo repository.StockMovementRepository
 	lotRepo      repository.LotRepository
+	variantRepo  repository.VariantRepository
+	productRepo  repository.ProductRepository
 }
 
-func NewStrategyFactory(b repository.BalanceRepository, m repository.StockMovementRepository, l repository.LotRepository) StrategyFactory {
-	return &strategyFactoryImpl{balanceRepo: b, movementRepo: m, lotRepo: l}
+func NewStrategyFactory(
+	b repository.BalanceRepository,
+	m repository.StockMovementRepository,
+	l repository.LotRepository,
+	v repository.VariantRepository,
+	p repository.ProductRepository,
+) StrategyFactory {
+	return &strategyFactoryImpl{
+		balanceRepo:  b,
+		movementRepo: m,
+		lotRepo:      l,
+		variantRepo:  v,
+		productRepo:  p,
+	}
 }
+
 func (f *strategyFactoryImpl) GetStrategy(policy string) (QuantityStrategy, error) {
 	switch policy {
 	case "total":
 		return NewTotalQuantityStrategy(f.balanceRepo, f.movementRepo), nil
 	case "fifo":
-		return NewFifoQuantityStrategy(f.lotRepo, f.movementRepo, f.balanceRepo), nil
+		return NewFifoQuantityStrategy(f.lotRepo, f.movementRepo, f.balanceRepo, f.variantRepo, f.productRepo), nil
 	default:
 		return nil, fmt.Errorf("unknown quantity accounting policy: %s", policy)
 	}
@@ -230,7 +245,17 @@ func (s *inventoryService) processOrder(tx *gorm.DB, doc *models.Document) error
 		}
 
 		if available.LessThan(item.Quantity) {
-			return fmt.Errorf("not enough available stock for variant %d", item.VariantID)
+			variant, _ := s.variantRepo.GetByID(item.VariantID)
+			productName := "Unknown Item"
+			sku := "No SKU"
+			if variant != nil {
+				sku = variant.SKU
+				if p, _ := s.productRepo.GetByID(variant.ProductID); p != nil {
+					productName = p.Name
+				}
+			}
+			return fmt.Errorf("Недостаточно товара '%s' (%s) на складе. Доступно: %s, Требуется: %s",
+				productName, sku, available.String(), item.Quantity.String())
 		}
 
 		res, err := s.reservationRepo.GetReservationWithTx(tx, *doc.WarehouseID, item.VariantID)
