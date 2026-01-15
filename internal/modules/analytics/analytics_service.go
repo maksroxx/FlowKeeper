@@ -17,31 +17,26 @@ func NewService(repo Repository) Service {
 }
 
 func (s *service) GetDashboardData(warehouseID *uint) (*DashboardData, error) {
-	// 1. Общий остаток (сумма количеств)
 	totalStock, _, err := s.repo.GetTotalStock(warehouseID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. Здоровье склада (Всего позиций / В наличии / Дефицит)
 	totalVariants, inStock, lowStock, err := s.repo.GetInventoryHealth(warehouseID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. Активность (операций за 30 дней, приход/расход за сегодня)
 	recentOps, inToday, outToday, err := s.repo.GetActivityStats(warehouseID, 30)
 	if err != nil {
 		return nil, err
 	}
 
-	// 4. Подготовка данных для графика
 	movementsRaw, err := s.repo.GetChartData(warehouseID, 30)
 	if err != nil {
 		return nil, err
 	}
 
-	// Агрегация графика в памяти (группировка по дате и типу)
 	chartMap := make(map[string]map[string]decimal.Decimal)
 
 	for _, m := range movementsRaw {
@@ -74,7 +69,6 @@ func (s *service) GetDashboardData(warehouseID *uint) (*DashboardData, error) {
 		}
 	}
 
-	// 5. Последние движения (Получаем готовые DTO с именами через JOIN)
 	recentMovements, err := s.repo.GetRecentMovements(warehouseID, 5)
 	if err != nil {
 		return nil, err
@@ -82,7 +76,7 @@ func (s *service) GetDashboardData(warehouseID *uint) (*DashboardData, error) {
 
 	return &DashboardData{
 		TotalStock:       totalStock,
-		TotalItemsCount:  totalVariants, // Используем общее кол-во вариантов как "Всего номенклатуры"
+		TotalItemsCount:  totalVariants,
 		TotalVariants:    totalVariants,
 		ItemsInStock:     inStock,
 		LowStockCount:    lowStock,

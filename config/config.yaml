@@ -8,6 +8,7 @@ database:
 
 modules:
   stock: true
+  reports: true
   analytics: true
   users: false
   shop: false

@@ -12,7 +12,6 @@ type DashboardData struct {
 	TotalItemsCount  int64 `json:"total_items_count"`
 	RecentOperations int64 `json:"recent_operations"`
 
-	// Метрики "здоровья" склада
 	TotalVariants int64 `json:"total_variants"`
 	ItemsInStock  int64 `json:"items_in_stock"`
 	LowStockCount int64 `json:"low_stock_count"`
