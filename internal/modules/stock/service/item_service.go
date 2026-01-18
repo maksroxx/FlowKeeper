@@ -73,9 +73,7 @@ func (s *variantService) List() ([]models.Variant, error) {
 // }
 
 func (s *variantService) Update(id uint, updates map[string]interface{}) (*models.Variant, error) {
-	if _, ok := updates["product_id"]; ok {
-		delete(updates, "product_id")
-	}
+	delete(updates, "product_id")
 	if chars, ok := updates["characteristics"]; ok {
 		jsonBytes, err := json.Marshal(chars)
 		if err != nil {

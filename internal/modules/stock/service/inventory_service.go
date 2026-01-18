@@ -114,6 +114,8 @@ func (s *inventoryService) ProcessDocumentWithTx(tx *gorm.DB, doc *models.Docume
 		return strategy.ProcessOutcome(tx, doc, s.config)
 	case "INCOME":
 		return strategy.ProcessIncome(tx, doc, s.config)
+	case "INVENTORY":
+		return s.processInventory(tx, doc, strategy)
 	default:
 		return fmt.Errorf("document type '%s' not supported for inventory processing", doc.Type)
 	}
@@ -142,9 +144,18 @@ func (s *inventoryService) RevertDocumentWithTx(tx *gorm.DB, doc *models.Documen
 		return strategy.RevertIncome(tx, doc, s.config)
 	case "OUTCOME":
 		return strategy.RevertOutcome(tx, doc, s.config)
-	}
 
-	return nil
+	case "INVENTORY":
+		if err := strategy.RevertOutcome(tx, doc, s.config); err != nil {
+			return fmt.Errorf("failed to revert inventory shortage: %w", err)
+		}
+		if err := strategy.RevertIncome(tx, doc, s.config); err != nil {
+			return fmt.Errorf("failed to revert inventory surplus: %w", err)
+		}
+		return nil
+	default:
+		return nil
+	}
 }
 
 func (s *inventoryService) GetAvailableQuantity(warehouseID, variantID uint) (decimal.Decimal, error) {
@@ -360,6 +371,59 @@ func (s *inventoryService) GetStockByVariant(variantID uint) ([]models.VariantSt
 	}
 
 	return results, nil
+}
+
+func (s *inventoryService) processInventory(tx *gorm.DB, doc *models.Document, strategy QuantityStrategy) error {
+	if doc.WarehouseID == nil {
+		return errors.New("warehouse_id is required for inventory")
+	}
+
+	for _, item := range doc.Items {
+		balance, err := s.balanceRepo.GetBalanceWithTx(tx, *doc.WarehouseID, item.VariantID)
+		if err != nil {
+			return err
+		}
+
+		systemQty := decimal.Zero
+		if balance != nil {
+			systemQty = balance.Quantity
+		}
+
+		factQty := item.Quantity
+
+		delta := factQty.Sub(systemQty)
+
+		if delta.IsZero() {
+			continue
+		}
+
+		adjustmentDoc := &models.Document{
+			ID:          doc.ID,
+			WarehouseID: doc.WarehouseID,
+			CreatedAt:   doc.CreatedAt,
+			Type:        "INVENTORY",
+		}
+
+		adjustmentItem := models.DocumentItem{
+			VariantID: item.VariantID,
+			Quantity:  delta.Abs(),
+			Price:     item.Price,
+		}
+		adjustmentDoc.Items = []models.DocumentItem{adjustmentItem}
+
+		if delta.IsPositive() {
+			// ИЗЛИШКИ = INCOME
+			if err := strategy.ProcessIncome(tx, adjustmentDoc, s.config); err != nil {
+				return fmt.Errorf("failed to process surplus for item %d: %w", item.VariantID, err)
+			}
+		} else {
+			// НЕДОСТАЧА = OUTCOME
+			if err := strategy.ProcessOutcome(tx, adjustmentDoc, s.config); err != nil {
+				return fmt.Errorf("failed to process shortage for item %d: %w", item.VariantID, err)
+			}
+		}
+	}
+	return nil
 }
 
 func toUpper(s string) string {
