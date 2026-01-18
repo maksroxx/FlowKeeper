@@ -106,5 +106,6 @@ func (m *Module) Migrate(db *gorm.DB) error {
 		&models.StockBalance{},
 		&models.DocumentHistory{},
 		&models.DocumentSequence{},
+		&models.ProductImage{},
 	)
 }

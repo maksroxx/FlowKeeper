@@ -30,11 +30,28 @@ func (h *ProductHandler) Register(r *gin.RouterGroup) {
 }
 
 func (h *ProductHandler) Create(c *gin.Context) {
-	var p models.Product
-	if err := c.ShouldBindJSON(&p); err != nil {
+	var req struct {
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		CategoryID  uint     `json:"category_id"`
+		Images      []string `json:"images"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	p := models.Product{
+		Name:        req.Name,
+		Description: req.Description,
+		CategoryID:  req.CategoryID,
+	}
+
+	for _, url := range req.Images {
+		p.Images = append(p.Images, models.ProductImage{URL: url})
+	}
+
 	created, err := h.service.Create(&p)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

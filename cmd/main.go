@@ -17,6 +17,7 @@ import (
 	"github.com/maksroxx/flowkeeper/internal/core"
 	"github.com/maksroxx/flowkeeper/internal/db"
 	"github.com/maksroxx/flowkeeper/internal/modules/analytics"
+	"github.com/maksroxx/flowkeeper/internal/modules/files"
 	"github.com/maksroxx/flowkeeper/internal/modules/reports"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock"
 )
@@ -95,6 +96,10 @@ func main() {
 
 	r.Use(cors.New(corsConfig))
 	app := core.NewApp(database, r)
+
+	if cfg.Modules.Files {
+		app.RegisterModule(files.NewModule())
+	}
 
 	if cfg.Modules.Stock {
 		app.RegisterModule(stock.NewModule())

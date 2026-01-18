@@ -10,10 +10,17 @@ import (
 )
 
 type Product struct {
-	ID          uint   `gorm:"primaryKey" json:"id"`
-	Name        string `gorm:"unique;not null" json:"name"`
-	Description string `json:"description"`
-	CategoryID  uint   `json:"category_id"`
+	ID          uint           `gorm:"primaryKey" json:"id"`
+	Name        string         `gorm:"unique;not null" json:"name"`
+	Description string         `json:"description"`
+	CategoryID  uint           `json:"category_id"`
+	Images      []ProductImage `gorm:"foreignKey:ProductID;constraint:OnDelete:CASCADE" json:"images"`
+}
+
+type ProductImage struct {
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	ProductID uint   `json:"product_id"`
+	URL       string `json:"url"`
 }
 
 type CharacteristicsMap map[string]string
