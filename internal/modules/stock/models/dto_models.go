@@ -6,6 +6,11 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+type ProductImageDTO struct {
+	ID  uint   `json:"id"`
+	URL string `json:"url"`
+}
+
 type VariantDTO struct {
 	ID              uint               `json:"id"`
 	ProductID       uint               `json:"product_id"`
@@ -14,6 +19,7 @@ type VariantDTO struct {
 	Characteristics CharacteristicsMap `json:"characteristics"`
 	UnitID          uint               `json:"unit_id"`
 	UnitName        string             `json:"unit_name"`
+	Images          []ProductImageDTO  `json:"images"`
 }
 
 type VariantListItemDTO struct {
@@ -27,7 +33,8 @@ type VariantListItemDTO struct {
 	UnitID          uint               `json:"unit_id"`
 	UnitName        string             `json:"unit_name"`
 
-	QuantityOnStock decimal.Decimal `json:"quantity_on_stock"`
+	QuantityOnStock decimal.Decimal   `json:"quantity_on_stock"`
+	Images          []ProductImageDTO `json:"images"  gorm:"-"`
 }
 
 type DocumentDTO struct {

@@ -176,6 +176,50 @@ func (g *PDFGenerator) GenerateCustomerReport(data []CustomerReportItem, from, t
 	return buf.Bytes(), err
 }
 
+func (g *PDFGenerator) GenerateABCReport(data []ABCItem, from, to time.Time) ([]byte, error) {
+	pdf := g.initPDF("P")
+
+	period := fmt.Sprintf("Период: %s - %s", from.Format("02.01.2006"), to.Format("02.01.2006"))
+	g.drawReportHeaderSimple(pdf, "Рейтинг продаж (ABC-анализ)", period)
+
+	headers := []string{"Артикул", "Товар", "Продано", "Выручка", "Доля %", "Класс"}
+	widths := []float64{35, 80, 20, 30, 15, 10}
+	aligns := []string{"L", "L", "R", "R", "R", "C"}
+	wrapCols := []bool{false, true, false, false, false, false}
+
+	g.drawTableHeader(pdf, headers, widths, aligns)
+
+	pdf.SetFont("Roboto", "", 9)
+	pdf.SetTextColor(0, 0, 0)
+
+	totalRev := decimal.Zero
+
+	for _, item := range data {
+		totalRev = totalRev.Add(item.Revenue)
+
+		rowValues := []string{
+			cleanString(item.SKU),
+			cleanString(item.ProductName),
+			item.QuantitySold.StringFixed(0),
+			fmtMoney(item.Revenue),
+			item.SharePercent.StringFixed(2),
+			item.Class,
+		}
+		g.drawSmartRow(pdf, widths, aligns, wrapCols, rowValues)
+	}
+
+	g.drawTotalRow(pdf, widths, []string{
+		"ИТОГО:",
+		fmtMoney(totalRev),
+		"", "",
+	}, []int{0, 1, 2})
+
+	g.drawFooter(pdf)
+	var buf bytes.Buffer
+	err := pdf.Output(&buf)
+	return buf.Bytes(), err
+}
+
 func (g *PDFGenerator) drawSmartRow(pdf *fpdf.Fpdf, widths []float64, aligns []string, wrapCols []bool, data []string) {
 	const lineHeight = 3.5
 	const cellPadding = 1.0
@@ -313,7 +357,7 @@ func (g *PDFGenerator) drawReportHeaderSimple(pdf *fpdf.Fpdf, title, subtitle st
 	pdf.SetTextColor(0, 0, 0)
 	pdf.SetFont("Roboto", "B", 16)
 	pdf.Cell(0, 8, title)
-	pdf.Ln(6)
+	pdf.Ln(8)
 	pdf.SetFont("Roboto", "", 10)
 	pdf.Write(5, subtitle)
 	pdf.Ln(5)

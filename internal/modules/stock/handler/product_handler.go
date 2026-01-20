@@ -31,10 +31,13 @@ func (h *ProductHandler) Register(r *gin.RouterGroup) {
 
 func (h *ProductHandler) Create(c *gin.Context) {
 	var req struct {
-		Name        string   `json:"name"`
-		Description string   `json:"description"`
-		CategoryID  uint     `json:"category_id"`
-		Images      []string `json:"images"`
+		Name            string            `json:"name"`
+		Description     string            `json:"description"`
+		CategoryID      uint              `json:"category_id"`
+		SKU             string            `json:"sku"`
+		UnitID          uint              `json:"unit_id"`
+		Characteristics map[string]string `json:"characteristics"`
+		Images          []string          `json:"images"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -42,17 +45,13 @@ func (h *ProductHandler) Create(c *gin.Context) {
 		return
 	}
 
-	p := models.Product{
+	p := &models.Product{
 		Name:        req.Name,
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
 	}
 
-	for _, url := range req.Images {
-		p.Images = append(p.Images, models.ProductImage{URL: url})
-	}
-
-	created, err := h.service.Create(&p)
+	created, err := h.service.Create(p, req.SKU, req.UnitID, req.Characteristics, req.Images)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

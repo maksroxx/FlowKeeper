@@ -10,16 +10,16 @@ import (
 )
 
 type Product struct {
-	ID          uint           `gorm:"primaryKey" json:"id"`
-	Name        string         `gorm:"unique;not null" json:"name"`
-	Description string         `json:"description"`
-	CategoryID  uint           `json:"category_id"`
-	Images      []ProductImage `gorm:"foreignKey:ProductID;constraint:OnDelete:CASCADE" json:"images"`
+	ID          uint   `gorm:"primaryKey" json:"id"`
+	Name        string `gorm:"unique;not null" json:"name"`
+	Description string `json:"description"`
+	CategoryID  uint   `json:"category_id"`
+	// Images      []ProductImage `gorm:"foreignKey:ProductID;constraint:OnDelete:CASCADE" json:"images"`
 }
 
 type ProductImage struct {
 	ID        uint   `gorm:"primaryKey" json:"id"`
-	ProductID uint   `json:"product_id"`
+	VariantID uint   `json:"variant_id"`
 	URL       string `json:"url"`
 }
 
@@ -50,6 +50,7 @@ type Variant struct {
 	SKU             string             `gorm:"unique" json:"sku"`
 	Characteristics CharacteristicsMap `gorm:"type:jsonb" json:"characteristics"`
 	UnitID          uint               `json:"unit_id"`
+	Images          []ProductImage     `gorm:"foreignKey:VariantID;constraint:OnDelete:CASCADE" json:"images"`
 }
 
 type CharacteristicType struct {

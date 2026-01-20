@@ -32,6 +32,8 @@ func (s *Service) GenerateReport(req ReportRequest) ([]byte, string, error) {
 		return s.generateMovements(req)
 	case "customers":
 		return s.generateCustomers(req)
+	case "abc":
+		return s.generateABCReport(req)
 	default:
 		return nil, "", fmt.Errorf("unknown report type: %s", req.Type)
 	}
@@ -142,6 +144,52 @@ func (s *Service) generateCustomers(req ReportRequest) ([]byte, string, error) {
 
 	default:
 		b, err := s.pdfGen.GenerateCustomerReport(data, req.DateFrom, req.DateTo)
+		return b, "pdf", err
+	}
+}
+
+func (s *Service) generateABCReport(req ReportRequest) ([]byte, string, error) {
+	data, err := s.repo.GetSalesRanking(req.DateFrom, req.DateTo, req.WarehouseID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	totalRevenue := decimal.Zero
+	for _, item := range data {
+		totalRevenue = totalRevenue.Add(item.Revenue)
+	}
+	runningSum := decimal.Zero
+
+	for i := range data {
+		if !totalRevenue.IsZero() {
+			data[i].SharePercent = data[i].Revenue.Div(totalRevenue).Mul(decimal.NewFromInt(100))
+		}
+
+		runningSum = runningSum.Add(data[i].Revenue)
+
+		cumulativePercent := decimal.Zero
+		if !totalRevenue.IsZero() {
+			cumulativePercent = runningSum.Div(totalRevenue).Mul(decimal.NewFromInt(100))
+		}
+
+		if cumulativePercent.LessThanOrEqual(decimal.NewFromInt(80)) {
+			data[i].Class = "A"
+		} else if cumulativePercent.LessThanOrEqual(decimal.NewFromInt(95)) {
+			data[i].Class = "B"
+		} else {
+			data[i].Class = "C"
+		}
+	}
+
+	switch req.Format {
+	case "excel", "xlsx":
+		b, err := s.excelGen.GenerateABC(data)
+		return b, "xlsx", err
+	case "csv":
+		b, err := s.csvGen.GenerateABC(data)
+		return b, "csv", err
+	default:
+		b, err := s.pdfGen.GenerateABCReport(data, req.DateFrom, req.DateTo)
 		return b, "pdf", err
 	}
 }

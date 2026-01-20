@@ -9,7 +9,7 @@ import (
 )
 
 type VariantService interface {
-	Create(v *models.Variant) (*models.Variant, error)
+	Create(v *models.Variant, images []string) (*models.Variant, error)
 	GetByID(id uint) (*models.Variant, error)
 	GetByIDAsDTO(id uint) (*models.VariantDTO, error)
 	List() ([]models.Variant, error)
@@ -32,7 +32,10 @@ func NewVariantService(
 	return &variantService{repo: repo, productRepo: productRepo, unitRepo: unitRepo}
 }
 
-func (s *variantService) Create(v *models.Variant) (*models.Variant, error) {
+func (s *variantService) Create(v *models.Variant, images []string) (*models.Variant, error) {
+	for _, url := range images {
+		v.Images = append(v.Images, models.ProductImage{URL: url})
+	}
 	return s.repo.Create(v)
 }
 
@@ -107,6 +110,10 @@ func (s *variantService) buildDTO(variant *models.Variant) (*models.VariantDTO, 
 		SKU:             variant.SKU,
 		Characteristics: variant.Characteristics,
 		UnitID:          variant.UnitID,
+	}
+
+	for _, img := range variant.Images {
+		dto.Images = append(dto.Images, models.ProductImageDTO{ID: img.ID, URL: img.URL})
 	}
 
 	if product, err := s.productRepo.GetByID(variant.ProductID); err == nil && product != nil {

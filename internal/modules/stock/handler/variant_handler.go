@@ -22,7 +22,6 @@ func (h *VariantHandler) Register(r *gin.RouterGroup) {
 	grp := r.Group("/variants")
 	{
 		grp.POST("", h.Create)
-		// grp.GET("", h.List)
 		grp.GET("/:id", h.GetByID)
 		grp.PUT("/:id", h.Update)
 		grp.DELETE("/:id", h.Delete)
@@ -32,27 +31,32 @@ func (h *VariantHandler) Register(r *gin.RouterGroup) {
 }
 
 func (h *VariantHandler) Create(c *gin.Context) {
-	var v models.Variant
-	if err := c.ShouldBindJSON(&v); err != nil {
+	var req struct {
+		ProductID       uint                      `json:"product_id"`
+		SKU             string                    `json:"sku"`
+		UnitID          uint                      `json:"unit_id"`
+		Characteristics models.CharacteristicsMap `json:"characteristics"`
+		Images          []string                  `json:"images"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	created, err := h.service.Create(&v)
+	v := &models.Variant{
+		ProductID:       req.ProductID,
+		SKU:             req.SKU,
+		UnitID:          req.UnitID,
+		Characteristics: req.Characteristics,
+	}
+
+	created, err := h.service.Create(v, req.Images)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusCreated, created)
-}
-
-func (h *VariantHandler) List(c *gin.Context) {
-	list, err := h.service.List()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, list)
 }
 
 func (h *VariantHandler) GetByID(c *gin.Context) {

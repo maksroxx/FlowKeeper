@@ -84,7 +84,6 @@ func (g *ExcelGenerator) GenerateProfit(data []ProfitItem) ([]byte, error) {
 	}
 
 	f.SetCellStyle(sheet, "A1", "I1", headerStyle)
-
 	if len(data) > 0 {
 		f.SetCellStyle(sheet, "A2", fmt.Sprintf("C%d", lastRow), dataStyle)
 		f.SetCellStyle(sheet, "D2", fmt.Sprintf("I%d", lastRow), moneyStyle)
@@ -128,7 +127,6 @@ func (g *ExcelGenerator) GenerateStock(data []StockItem) ([]byte, error) {
 	}
 
 	f.SetCellStyle(sheet, "A1", "H1", headerStyle)
-
 	if len(data) > 0 {
 		f.SetCellStyle(sheet, "A2", fmt.Sprintf("F%d", lastRow), dataStyle)
 		f.SetCellStyle(sheet, "G2", fmt.Sprintf("H%d", lastRow), moneyStyle)
@@ -219,7 +217,6 @@ func (g *ExcelGenerator) GenerateCustomers(data []CustomerReportItem) ([]byte, e
 	}
 
 	f.SetCellStyle(sheet, "A1", "C1", headerStyle)
-
 	if len(data) > 0 {
 		f.SetCellStyle(sheet, "A2", fmt.Sprintf("B%d", lastRow), dataStyle)
 		f.SetCellStyle(sheet, "C2", fmt.Sprintf("C%d", lastRow), moneyStyle)
@@ -228,6 +225,46 @@ func (g *ExcelGenerator) GenerateCustomers(data []CustomerReportItem) ([]byte, e
 	f.SetColWidth(sheet, "A", "A", 40)
 	f.SetColWidth(sheet, "B", "B", 20)
 	f.SetColWidth(sheet, "C", "C", 25)
+
+	buf, err := f.WriteToBuffer()
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (g *ExcelGenerator) GenerateABC(data []ABCItem) ([]byte, error) {
+	f := excelize.NewFile()
+	sheet := "ABC Analysis"
+	f.SetSheetName("Sheet1", sheet)
+
+	headerStyle, dataStyle, moneyStyle := g.createStyles(f)
+
+	headers := []string{"Артикул", "Товар", "Продано", "Выручка", "Доля %", "Класс"}
+	for i, h := range headers {
+		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
+		f.SetCellValue(sheet, cell, h)
+	}
+
+	lastRow := len(data) + 1
+	for i, item := range data {
+		row := i + 2
+		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), item.SKU)
+		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), item.ProductName)
+		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), item.QuantitySold.InexactFloat64())
+		f.SetCellValue(sheet, fmt.Sprintf("D%d", row), item.Revenue.InexactFloat64())
+		f.SetCellValue(sheet, fmt.Sprintf("E%d", row), item.SharePercent.InexactFloat64())
+		f.SetCellValue(sheet, fmt.Sprintf("F%d", row), item.Class)
+	}
+
+	f.SetCellStyle(sheet, "A1", "F1", headerStyle)
+	if len(data) > 0 {
+		f.SetCellStyle(sheet, "A2", fmt.Sprintf("C%d", lastRow), dataStyle)
+		f.SetCellStyle(sheet, "D2", fmt.Sprintf("E%d", lastRow), moneyStyle)
+		f.SetCellStyle(sheet, "F2", fmt.Sprintf("F%d", lastRow), dataStyle)
+	}
+
+	f.SetColWidth(sheet, "B", "B", 40)
 
 	buf, err := f.WriteToBuffer()
 	if err != nil {
@@ -311,6 +348,22 @@ func (g *CSVGenerator) GenerateCustomers(data []CustomerReportItem) ([]byte, err
 	for _, item := range data {
 		w.Write([]string{
 			item.CounterpartyName, fmt.Sprintf("%d", item.OperationsCount), item.TotalRevenue.StringFixed(2),
+		})
+	}
+	w.Flush()
+	return buf.Bytes(), w.Error()
+}
+
+func (g *CSVGenerator) GenerateABC(data []ABCItem) ([]byte, error) {
+	buf := &bytes.Buffer{}
+	g.writeBOM(buf)
+	w := csv.NewWriter(buf)
+	w.Comma = ';'
+	w.Write([]string{"Артикул", "Товар", "Продано", "Выручка", "Доля %", "Класс"})
+	for _, item := range data {
+		w.Write([]string{
+			item.SKU, item.ProductName, item.QuantitySold.StringFixed(0),
+			item.Revenue.StringFixed(2), item.SharePercent.StringFixed(2), item.Class,
 		})
 	}
 	w.Flush()

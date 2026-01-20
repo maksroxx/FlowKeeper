@@ -8,7 +8,7 @@ import (
 )
 
 type ProductService interface {
-	Create(p *models.Product) (*models.Product, error)
+	Create(p *models.Product, sku string, unitID uint, characteristics map[string]string, images []string) (*models.Product, error)
 	GetByID(id uint) (*models.Product, error)
 	List() ([]models.Product, error)
 	Update(id uint, updates map[string]interface{}) (*models.Product, error)
@@ -26,8 +26,28 @@ func NewProductService(repo repository.ProductRepository, variantRepo repository
 	return &productService{repo: repo, variantRepo: variantRepo}
 }
 
-func (s *productService) Create(p *models.Product) (*models.Product, error) {
-	return s.repo.Create(p)
+func (s *productService) Create(p *models.Product, sku string, unitID uint, char map[string]string, images []string) (*models.Product, error) {
+	createdProduct, err := s.repo.Create(p)
+	if err != nil {
+		return nil, err
+	}
+
+	v := &models.Variant{
+		ProductID:       createdProduct.ID,
+		SKU:             sku,
+		UnitID:          unitID,
+		Characteristics: char,
+	}
+
+	for _, url := range images {
+		v.Images = append(v.Images, models.ProductImage{URL: url})
+	}
+
+	if _, err := s.variantRepo.Create(v); err != nil {
+		return nil, err
+	}
+
+	return createdProduct, nil
 }
 
 func (s *productService) GetByID(id uint) (*models.Product, error) {

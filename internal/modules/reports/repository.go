@@ -12,6 +12,7 @@ type Repository interface {
 	GetStockData(warehouseID *uint) ([]StockItem, error)
 	GetMovementsData(from, to time.Time, warehouseID *uint) ([]MovementItem, error)
 	GetCustomerData(from, to time.Time) ([]CustomerReportItem, error)
+	GetSalesRanking(from, to time.Time, warehouseID *uint) ([]ABCItem, error)
 }
 
 type repository struct {
@@ -143,6 +144,33 @@ func (r *repository) GetCustomerData(from, to time.Time) ([]CustomerReportItem, 
 		Where("documents.created_at BETWEEN ? AND ?", from, to).
 		Group("COALESCE(counterparties.name, 'Розничный покупатель')").
 		Order("total_revenue DESC").
+		Scan(&results).Error
+
+	return results, err
+}
+
+func (r *repository) GetSalesRanking(from, to time.Time, warehouseID *uint) ([]ABCItem, error) {
+	var results []ABCItem
+
+	query := r.db.Table("stock_movements as sm").
+		Select(`
+			variants.sku, 
+			products.name as product_name,
+			COALESCE(SUM(ABS(sm.quantity)), 0) as quantity_sold,
+			COALESCE(SUM(ABS(sm.quantity) * COALESCE(sale_item.price, 0)), 0) as revenue
+		`).
+		Joins("JOIN variants ON variants.id = sm.item_id").
+		Joins("JOIN products ON products.id = variants.product_id").
+		Joins("LEFT JOIN document_items as sale_item ON sale_item.document_id = sm.document_id AND sale_item.item_id = sm.item_id").
+		Where("sm.type = ?", "OUTCOME").
+		Where("sm.created_at BETWEEN ? AND ?", from, to)
+
+	if warehouseID != nil {
+		query = query.Where("sm.warehouse_id = ?", *warehouseID)
+	}
+
+	err := query.Group("variants.id, variants.sku, products.name").
+		Order("revenue DESC").
 		Scan(&results).Error
 
 	return results, err

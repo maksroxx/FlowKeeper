@@ -32,7 +32,7 @@ func (r *variantRepo) Create(v *models.Variant) (*models.Variant, error) {
 
 func (r *variantRepo) GetByID(id uint) (*models.Variant, error) {
 	var variant models.Variant
-	if err := r.db.First(&variant, id).Error; err != nil {
+	if err := r.db.Preload("Images").First(&variant, id).Error; err != nil {
 		return nil, err
 	}
 	return &variant, nil
@@ -59,8 +59,32 @@ func (r *variantRepo) Update(v *models.Variant) (*models.Variant, error) {
 }
 
 func (r *variantRepo) Patch(id uint, updates map[string]interface{}) (*models.Variant, error) {
-	if err := r.db.Model(&models.Variant{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+	var variant models.Variant
+	if err := r.db.First(&variant, id).Error; err != nil {
 		return nil, err
+	}
+
+	if imgData, ok := updates["images"]; ok {
+		r.db.Where("variant_id = ?", id).Delete(&models.ProductImage{})
+
+		if urls, ok := imgData.([]interface{}); ok {
+			var newImages []models.ProductImage
+			for _, u := range urls {
+				if urlStr, ok := u.(string); ok {
+					newImages = append(newImages, models.ProductImage{VariantID: id, URL: urlStr})
+				}
+			}
+			if len(newImages) > 0 {
+				r.db.Create(&newImages)
+			}
+		}
+		delete(updates, "images")
+	}
+
+	if len(updates) > 0 {
+		if err := r.db.Model(&variant).Updates(updates).Error; err != nil {
+			return nil, err
+		}
 	}
 	return r.GetByID(id)
 }
@@ -69,6 +93,7 @@ func (r *variantRepo) Delete(id uint) error {
 	return r.db.Delete(&models.Variant{}, id).Error
 }
 
+// тут недо жестко попотеть и обновить
 func (r *variantRepo) Search(filter models.VariantFilter) ([]models.VariantListItemDTO, error) {
 	var results []models.VariantListItemDTO
 
@@ -146,13 +171,36 @@ func (r *variantRepo) Search(filter models.VariantFilter) ([]models.VariantListI
 	}
 
 	enrichQuery = enrichQuery.Select(strings.Join(selects, ", "))
-	err = enrichQuery.Order("variants.id asc").Scan(&results).Error
 
-	return results, err
+	err = enrichQuery.Order("variants.id asc").Scan(&results).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var images []models.ProductImage
+	r.db.Where("variant_id IN ?", variantIDs).Find(&images)
+
+	imgMap := make(map[uint][]models.ProductImageDTO)
+	for _, img := range images {
+		imgMap[img.VariantID] = append(imgMap[img.VariantID], models.ProductImageDTO{
+			ID:  img.ID,
+			URL: img.URL,
+		})
+	}
+
+	for i := range results {
+		if imgs, ok := imgMap[results[i].ID]; ok {
+			results[i].Images = imgs
+		} else {
+			results[i].Images = []models.ProductImageDTO{}
+		}
+	}
+
+	return results, nil
 }
 
 func (r *variantRepo) FindByProductID(productID uint) ([]models.Variant, error) {
 	var variants []models.Variant
-	err := r.db.Where("product_id = ?", productID).Order("id asc").Find(&variants).Error
+	err := r.db.Where("product_id = ?", productID).Preload("Images").Order("id asc").Find(&variants).Error
 	return variants, err
 }

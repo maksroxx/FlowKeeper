@@ -61,3 +61,13 @@ type CustomerReportItem struct {
 	OperationsCount  int64           `json:"operations_count"`
 	TotalRevenue     decimal.Decimal `json:"total_revenue"`
 }
+
+// ABC
+type ABCItem struct {
+	SKU          string          `json:"sku"`
+	ProductName  string          `json:"product_name"`
+	QuantitySold decimal.Decimal `json:"quantity_sold"`
+	Revenue      decimal.Decimal `json:"revenue"`       // Выручка
+	SharePercent decimal.Decimal `json:"share_percent"` // Доля в общей выручке %
+	Class        string          `json:"class"`         // A, B, C
+}

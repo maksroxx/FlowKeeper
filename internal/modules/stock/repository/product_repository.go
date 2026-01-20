@@ -28,7 +28,7 @@ func (r *productRepo) Create(p *models.Product) (*models.Product, error) {
 
 func (r *productRepo) GetByID(id uint) (*models.Product, error) {
 	var p models.Product
-	if err := r.db.Preload("Images").First(&p, id).Error; err != nil {
+	if err := r.db.First(&p, id).Error; err != nil {
 		return nil, err
 	}
 	return &p, nil
@@ -45,7 +45,7 @@ func (r *productRepo) GetByIDs(ids []uint) ([]models.Product, error) {
 
 func (r *productRepo) List() ([]models.Product, error) {
 	var ps []models.Product
-	err := r.db.Preload("Images").Find(&ps).Error
+	err := r.db.Find(&ps).Error
 	return ps, err
 }
 
@@ -59,28 +59,10 @@ func (r *productRepo) Patch(id uint, updates map[string]interface{}) (*models.Pr
 	if err := r.db.First(&product, id).Error; err != nil {
 		return nil, err
 	}
-
-	if imgData, ok := updates["images"]; ok {
-		r.db.Where("product_id = ?", id).Delete(&models.ProductImage{})
-		if urls, ok := imgData.([]interface{}); ok {
-			var newImages []models.ProductImage
-			for _, u := range urls {
-				if urlStr, ok := u.(string); ok {
-					newImages = append(newImages, models.ProductImage{ProductID: id, URL: urlStr})
-				}
-			}
-			r.db.Create(&newImages)
-		}
-		delete(updates, "images")
+	if err := r.db.Model(&product).Updates(updates).Error; err != nil {
+		return nil, err
 	}
-
-	if len(updates) > 0 {
-		if err := r.db.Model(&product).Updates(updates).Error; err != nil {
-			return nil, err
-		}
-	}
-
-	return r.GetByID(id)
+	return &product, nil
 }
 
 func (r *productRepo) Delete(id uint) error {

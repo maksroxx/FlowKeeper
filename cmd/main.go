@@ -117,6 +117,7 @@ func main() {
 		log.Fatal(err)
 	}
 
+	files.CleanupOrphanedImages(database)
 	api.InitAPI(r, app)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
