@@ -1,45 +1,87 @@
 package users
 
-import "gorm.io/gorm"
+import (
+	"errors"
 
-type UserRepository interface {
-	Create(user *User) error
-	GetAll() ([]User, error)
-	GetByID(id uint) (*User, error)
-	Update(user *User) error
-	Delete(id uint) error
+	"gorm.io/gorm"
+)
+
+type Repository interface {
+	CreateUser(user *User) error
+	GetUsers() ([]User, error)
+	GetUserByID(id uint) (*User, error)
+	GetUserByEmail(email string) (*User, error)
+	UpdateUser(user *User) error
+	DeleteUser(id uint) error
+
+	CreateRole(role *Role) error
+	GetRoles() ([]Role, error)
+	GetRoleByID(id uint) (*Role, error)
+	UpdateRole(role *Role) error
+	DeleteRole(id uint) error
 }
 
-type userRepository struct {
+type repository struct {
 	db *gorm.DB
 }
 
-func NewRepository(db *gorm.DB) UserRepository {
-	return &userRepository{db: db}
+func NewRepository(db *gorm.DB) Repository {
+	return &repository{db: db}
 }
 
-func (r *userRepository) Create(user *User) error {
+func (r *repository) CreateUser(user *User) error {
 	return r.db.Create(user).Error
 }
 
-func (r *userRepository) GetAll() ([]User, error) {
+func (r *repository) GetUsers() ([]User, error) {
 	var users []User
-	err := r.db.Find(&users).Error
+	err := r.db.Preload("Role").Find(&users).Error
 	return users, err
 }
 
-func (r *userRepository) GetByID(id uint) (*User, error) {
+func (r *repository) GetUserByID(id uint) (*User, error) {
 	var user User
-	if err := r.db.First(&user, id).Error; err != nil {
-		return nil, err
+	err := r.db.Preload("Role").First(&user, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
 	}
-	return &user, nil
+	return &user, err
 }
 
-func (r *userRepository) Update(user *User) error {
+func (r *repository) GetUserByEmail(email string) (*User, error) {
+	var user User
+	err := r.db.Preload("Role").Where("email = ?", email).First(&user).Error
+	return &user, err
+}
+
+func (r *repository) UpdateUser(user *User) error {
 	return r.db.Save(user).Error
 }
 
-func (r *userRepository) Delete(id uint) error {
+func (r *repository) DeleteUser(id uint) error {
 	return r.db.Delete(&User{}, id).Error
+}
+
+func (r *repository) CreateRole(role *Role) error {
+	return r.db.Create(role).Error
+}
+
+func (r *repository) GetRoles() ([]Role, error) {
+	var roles []Role
+	err := r.db.Find(&roles).Error
+	return roles, err
+}
+
+func (r *repository) GetRoleByID(id uint) (*Role, error) {
+	var role Role
+	err := r.db.First(&role, id).Error
+	return &role, err
+}
+
+func (r *repository) UpdateRole(role *Role) error {
+	return r.db.Save(role).Error
+}
+
+func (r *repository) DeleteRole(id uint) error {
+	return r.db.Delete(&Role{}, id).Error
 }

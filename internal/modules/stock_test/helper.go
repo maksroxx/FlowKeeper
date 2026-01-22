@@ -15,6 +15,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	"github.com/maksroxx/flowkeeper/internal/config"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 )
@@ -28,7 +29,7 @@ func setupTestRouter(dbName string) (*gin.Engine, *gorm.DB) {
 	}
 	db.Exec("PRAGMA journal_mode = WAL;")
 
-	stockModule := stock.NewModule()
+	stockModule := stock.NewModule(config.AuthConfig{})
 	err = stockModule.Migrate(db)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to migrate database: %v", err))
@@ -41,7 +42,6 @@ func setupTestRouter(dbName string) (*gin.Engine, *gorm.DB) {
 	return router, db
 }
 
-// TestHelper - наш помощник для интеграционных тестов.
 type TestHelper struct {
 	T      *testing.T
 	Router *gin.Engine
@@ -52,7 +52,6 @@ func NewTestHelper(t *testing.T, router *gin.Engine) *TestHelper {
 	return &TestHelper{T: t, Router: router, Assert: require.New(t)}
 }
 
-// PerformRequest - низкоуровневый метод для выполнения любого HTTP-запроса.
 func (h *TestHelper) PerformRequest(method, path string, body interface{}) *httptest.ResponseRecorder {
 	var reqBody []byte
 	if body != nil {

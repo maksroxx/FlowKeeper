@@ -39,3 +39,7 @@ seed:
 	@echo "Seeding the database with ICU support..."
 	@mkdir -p $(DB_DIR)
 	@go run -tags "$(BUILD_TAGS)" ./seeder/seeder.go
+
+seed-auth:
+	@echo "Seeding Auth Data (Users & Roles)..."
+	@go run -tags "$(BUILD_TAGS)" ./seeder/auth_seeder.go

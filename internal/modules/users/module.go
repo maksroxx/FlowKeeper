@@ -1,102 +1,60 @@
 package users
 
 import (
-	"net/http"
-	"strconv"
-
 	"github.com/gin-gonic/gin"
+	"github.com/maksroxx/flowkeeper/internal/config"
 	"gorm.io/gorm"
 )
 
-type Module struct{}
+type Module struct {
+	config config.AuthConfig
+}
 
-func NewModule() *Module {
-	return &Module{}
+func NewModule(cfg config.AuthConfig) *Module {
+	return &Module{config: cfg}
 }
 
 func (m *Module) Name() string { return "users" }
 
 func (m *Module) Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(&User{})
+	return db.AutoMigrate(&Role{}, &User{})
 }
 
-func (m *Module) RegisterRoutes(r *gin.RouterGroup, db *gorm.DB) {
+func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	repo := NewRepository(db)
-	service := NewService(repo)
+	authSvc := NewAuthService(repo, m.config)
+	userSvc := NewUserService(repo)
 
-	group := r.Group("/users")
+	h := NewHandler(authSvc, userSvc)
+
+	authGroup := r.Group("/api/v1/auth")
 	{
-		group.POST("", func(c *gin.Context) {
-			var req struct {
-				Name     string `json:"name"`
-				Email    string `json:"email"`
-				Password string `json:"password"`
-				Role     string `json:"role"`
-			}
-			if err := c.ShouldBindJSON(&req); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-				return
-			}
-			user, err := service.AddUser(req.Name, req.Email, req.Password, req.Role)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-			c.JSON(http.StatusOK, user)
-		})
+		authGroup.POST("/login", h.Login)
+	}
 
-		group.GET("", func(c *gin.Context) {
-			users, err := service.ListUsers()
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-			c.JSON(http.StatusOK, users)
-		})
+	api := r.Group("/api/v1")
+	api.Use(AuthMiddleware(m.config))
+	{
+		api.GET("/auth/me", h.GetMe)
 
-		group.GET("/:id", func(c *gin.Context) {
-			id, _ := strconv.Atoi(c.Param("id"))
-			user, err := service.GetUser(uint(id))
-			if err != nil {
-				c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-				return
-			}
-			c.JSON(http.StatusOK, user)
-		})
+		// Пользователи (для админов)
+		userGroup := api.Group("/users")
+		userGroup.Use(RequirePermission("manage_users"))
+		{
+			userGroup.GET("", h.ListUsers)
+			userGroup.POST("", h.CreateUser)
+			userGroup.PUT("/:id", h.UpdateUser)
+			userGroup.DELETE("/:id", h.DeleteUser)
+		}
 
-		group.PUT("/:id", func(c *gin.Context) {
-			id, _ := strconv.Atoi(c.Param("id"))
-			var req struct {
-				Name     string `json:"name"`
-				Email    string `json:"email"`
-				Password string `json:"password"`
-				Role     string `json:"role"`
-			}
-			if err := c.ShouldBindJSON(&req); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-				return
-			}
-			user := &User{
-				ID:       uint(id),
-				Name:     req.Name,
-				Email:    req.Email,
-				Password: req.Password,
-				Role:     req.Role,
-			}
-			if err := service.UpdateUser(user); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-			c.JSON(http.StatusOK, user)
-		})
-
-		group.DELETE("/:id", func(c *gin.Context) {
-			id, _ := strconv.Atoi(c.Param("id"))
-			if err := service.DeleteUser(uint(id)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-			c.JSON(http.StatusOK, gin.H{"deleted": true})
-		})
+		// Роли (для админов)
+		roleGroup := api.Group("/roles")
+		roleGroup.Use(RequirePermission("manage_users"))
+		{
+			roleGroup.GET("", h.ListRoles)
+			roleGroup.POST("", h.CreateRole)
+			roleGroup.PUT("/:id", h.UpdateRole)
+			roleGroup.DELETE("/:id", h.DeleteRole)
+		}
 	}
 }

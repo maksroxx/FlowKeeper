@@ -25,10 +25,16 @@ type ModulesConfig struct {
 	Shop      bool `yaml:"shop"`
 }
 
+type AuthConfig struct {
+	JWTSecret     string `yaml:"jwt_secret"`
+	TokenTTLHours int    `yaml:"token_ttl_hours"`
+}
+
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
 	Modules  ModulesConfig  `yaml:"modules"`
+	Auth     AuthConfig     `yaml:"auth"`
 }
 
 func LoadConfig(path string) (*Config, error) {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -20,6 +21,7 @@ import (
 	"github.com/maksroxx/flowkeeper/internal/modules/files"
 	"github.com/maksroxx/flowkeeper/internal/modules/reports"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock"
+	"github.com/maksroxx/flowkeeper/internal/modules/users"
 )
 
 func main() {
@@ -72,7 +74,10 @@ func main() {
 		}
 	}
 
-	cfg, err := config.LoadConfig("config/config.yaml")
+	configPath := flag.String("config", "config/config.yaml", "Path to configuration file")
+	flag.Parse()
+
+	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
 		log.Fatal("failed to load config: ", err)
 	}
@@ -102,7 +107,11 @@ func main() {
 	}
 
 	if cfg.Modules.Stock {
-		app.RegisterModule(stock.NewModule())
+		app.RegisterModule(stock.NewModule(cfg.Auth))
+	}
+
+	if cfg.Modules.Users {
+		app.RegisterModule(users.NewModule(cfg.Auth))
 	}
 
 	if cfg.Modules.Analytics {

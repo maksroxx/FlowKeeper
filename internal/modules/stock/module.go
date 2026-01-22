@@ -6,21 +6,28 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	auconf "github.com/maksroxx/flowkeeper/internal/config"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/config"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/handler"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/repository"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/service"
+	"github.com/maksroxx/flowkeeper/internal/modules/users"
 )
 
-type Module struct{}
+type Module struct {
+	authConfig auconf.AuthConfig
+}
 
-func NewModule() *Module { return &Module{} }
+func NewModule(authCfg auconf.AuthConfig) *Module {
+	return &Module{authConfig: authCfg}
+}
 
 func (m *Module) Name() string { return "stock" }
 
 func (m *Module) RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	grp := r.Group("/api/v1/stock")
+	grp.Use(users.AuthMiddleware(m.authConfig))
 
 	stockCfg, err := config.LoadStockConfig("./config/stock_config.yml")
 	if err != nil {
@@ -97,7 +104,6 @@ func (m *Module) Migrate(db *gorm.DB) error {
 		&models.Counterparty{},
 		&models.Document{},
 		&models.DocumentItem{},
-		// &models.Item{},
 		&models.ItemPrice{},
 		&models.PriceType{},
 		&models.StockMovement{},

@@ -11,5 +11,9 @@ modules:
   stock: true
   reports: true
   analytics: true
-  users: false
+  users: true
   shop: false
+
+auth:
+  jwt_secret: "super-secret-key-change-me-in-production"
+  token_ttl_hours: 168
