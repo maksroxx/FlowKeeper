@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/maksroxx/flowkeeper/internal/api"
+	"github.com/maksroxx/flowkeeper/internal/bootstrap"
 	"github.com/maksroxx/flowkeeper/internal/config"
 	"github.com/maksroxx/flowkeeper/internal/core"
 	"github.com/maksroxx/flowkeeper/internal/db"
@@ -37,13 +39,12 @@ func main() {
 
 	for name, url := range fonts {
 		path := filepath.Join(fontDir, name)
-
 		if _, err := os.Stat(path); os.IsNotExist(err) {
+			// Чистим мусор от возможных неудачных загрузок
 			os.Remove(path + ".json")
 			os.Remove(path + ".z")
 
 			fmt.Printf("Скачивание %s...\n", name)
-
 			resp, err := http.Get(url)
 			if err != nil {
 				log.Printf("⚠️ Не удалось скачать шрифт %s: %v", name, err)
@@ -68,9 +69,7 @@ func main() {
 				log.Printf("⚠️ Ошибка сохранения файла %s: %v", name, err)
 				continue
 			}
-
 			fmt.Printf("✅ Успешно скачан: %s (%.2f KB)\n", name, float64(size)/1024)
-		} else {
 		}
 	}
 
@@ -89,6 +88,7 @@ func main() {
 
 	r := gin.Default()
 	r.RedirectTrailingSlash = true
+
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
 	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
@@ -98,8 +98,8 @@ func main() {
 		_, err := url.Parse(origin)
 		return err == nil
 	}
-
 	r.Use(cors.New(corsConfig))
+
 	app := core.NewApp(database, r)
 
 	if cfg.Modules.Files {
@@ -123,15 +123,24 @@ func main() {
 	}
 
 	if err := app.Migrate(); err != nil {
-		log.Fatal(err)
+		log.Fatal("Migration failed: ", err)
 	}
 
+	bootstrap.Run(database)
 	files.CleanupOrphanedImages(database)
 	api.InitAPI(r, app)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
-	fmt.Printf("Сервер запущен на %s\n", addr)
-	if err := r.Run(addr); err != nil {
+
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatal("Failed to listen: ", err)
+	}
+
+	realPort := listener.Addr().(*net.TCPAddr).Port
+	fmt.Printf("FLOWKEEPER_STARTED_PORT:%d\n", realPort)
+
+	if err := http.Serve(listener, r); err != nil {
 		log.Fatal(err)
 	}
 }
