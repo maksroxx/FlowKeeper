@@ -8,12 +8,23 @@ import (
 )
 
 func Connect(cfg config.DatabaseConfig) (*gorm.DB, error) {
+	var db *gorm.DB
+	var err error
+
 	switch cfg.Driver {
 	case "postgres":
-		return gorm.Open(postgres.Open(cfg.DSN), &gorm.Config{})
+		db, err = gorm.Open(postgres.Open(cfg.DSN), &gorm.Config{})
 	case "sqlite":
-		return gorm.Open(sqlite.Open(cfg.DSN), &gorm.Config{})
+		db, err = gorm.Open(sqlite.Open(cfg.DSN), &gorm.Config{})
+		if err == nil {
+			db.Exec("PRAGMA foreign_keys = ON")
+		}
 	default:
-		return gorm.Open(sqlite.Open("local.db"), &gorm.Config{})
+		db, err = gorm.Open(sqlite.Open("local.db"), &gorm.Config{})
+		if err == nil {
+			db.Exec("PRAGMA foreign_keys = ON")
+		}
 	}
+
+	return db, err
 }
