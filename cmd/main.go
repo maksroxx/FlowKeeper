@@ -23,6 +23,7 @@ import (
 	"github.com/maksroxx/flowkeeper/internal/modules/files"
 	"github.com/maksroxx/flowkeeper/internal/modules/reports"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock"
+	"github.com/maksroxx/flowkeeper/internal/modules/system"
 	"github.com/maksroxx/flowkeeper/internal/modules/users"
 )
 
@@ -40,7 +41,6 @@ func main() {
 	for name, url := range fonts {
 		path := filepath.Join(fontDir, name)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
-			// Чистим мусор от возможных неудачных загрузок
 			os.Remove(path + ".json")
 			os.Remove(path + ".z")
 
@@ -87,6 +87,7 @@ func main() {
 	}
 
 	r := gin.Default()
+	gin.SetMode(gin.ReleaseMode)
 	r.RedirectTrailingSlash = true
 
 	corsConfig := cors.DefaultConfig()
@@ -104,6 +105,10 @@ func main() {
 
 	if cfg.Modules.Files {
 		app.RegisterModule(files.NewModule())
+	}
+
+	if cfg.Modules.System {
+		app.RegisterModule(system.NewModule(cfg.Database))
 	}
 
 	if cfg.Modules.Stock {

@@ -8,6 +8,7 @@ database:
 
 modules:
   files: true
+  system: true
   stock: true
   reports: true
   analytics: true

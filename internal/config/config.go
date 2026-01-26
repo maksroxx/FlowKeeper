@@ -18,6 +18,7 @@ type DatabaseConfig struct {
 
 type ModulesConfig struct {
 	Files     bool `yaml:"files"`
+	System    bool `yaml:"system"`
 	Analytics bool `yaml:"analytics"`
 	Reports   bool `yaml:"reports"`
 	Stock     bool `yaml:"stock"`
