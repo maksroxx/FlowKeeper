@@ -26,6 +26,8 @@ func (h *ProductHandler) Register(r *gin.RouterGroup) {
 		grp.PUT("/:id", h.Update)
 		grp.DELETE("/:id", h.Delete)
 		grp.GET("/:id/options", h.GetProductOptions)
+
+		grp.POST("/import", h.Import)
 	}
 }
 
@@ -133,4 +135,26 @@ func (h *ProductHandler) GetProductOptions(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, details)
+}
+
+func (h *ProductHandler) Import(c *gin.Context) {
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File required"})
+		return
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot open file"})
+		return
+	}
+	defer file.Close()
+
+	if err := h.service.ImportItems(file, fileHeader.Filename); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Import failed: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Товары успешно импортированы"})
 }

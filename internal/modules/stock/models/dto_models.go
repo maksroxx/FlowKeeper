@@ -142,3 +142,12 @@ type VariantStockDTO struct {
 	Reserved      decimal.Decimal `json:"reserved"`
 	Available     decimal.Decimal `json:"available"`
 }
+
+type ImportItemDTO struct {
+	CategoryName    string
+	ProductName     string
+	Description     string
+	UnitName        string
+	SKU             string
+	Characteristics map[string]string
+}

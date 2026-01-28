@@ -1,10 +1,14 @@
 package service
 
 import (
+	"encoding/csv"
 	"errors"
+	"mime/multipart"
+	"strings"
 
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/models"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock/repository"
+	"github.com/xuri/excelize/v2"
 )
 
 type ProductService interface {
@@ -15,6 +19,7 @@ type ProductService interface {
 	Delete(id uint) error
 
 	GetProductDetails(productID uint) (*models.ProductDetailDTO, error)
+	ImportItems(file multipart.File, filename string) error
 }
 
 type productService struct {
@@ -122,4 +127,100 @@ func (s *productService) GetProductDetails(productID uint) (*models.ProductDetai
 	}
 
 	return details, nil
+}
+
+func (s *productService) ImportItems(file multipart.File, filename string) error {
+	var rows [][]string
+	var err error
+
+	if strings.HasSuffix(strings.ToLower(filename), ".xlsx") {
+		f, err := excelize.OpenReader(file)
+		if err != nil {
+			return err
+		}
+		sheetName := f.GetSheetName(0)
+		if sheetName == "" {
+			return errors.New("xlsx file is empty")
+		}
+		rows, err = f.GetRows(sheetName)
+		if err != nil {
+			return err
+		}
+	} else if strings.HasSuffix(strings.ToLower(filename), ".csv") {
+		reader := csv.NewReader(file)
+		reader.Comma = ';'
+		reader.LazyQuotes = true
+		rows, err = reader.ReadAll()
+		if err != nil {
+			return err
+		}
+	} else {
+		return errors.New("unsupported file format (use .csv or .xlsx)")
+	}
+
+	if len(rows) > 0 {
+		firstCell := strings.ToLower(strings.TrimSpace(rows[0][0]))
+		if strings.Contains(firstCell, "категория") || strings.Contains(firstCell, "category") {
+			rows = rows[1:]
+		}
+	}
+
+	var importData []models.ImportItemDTO
+
+	for _, row := range rows {
+		if len(row) < 3 {
+			continue
+		}
+
+		catName := strings.TrimSpace(row[0])
+		prodName := strings.TrimSpace(row[1])
+		sku := strings.TrimSpace(row[2])
+
+		if prodName == "" || sku == "" {
+			continue
+		}
+		if catName == "" {
+			catName = "Общее"
+		}
+
+		unitName := "шт"
+		if len(row) > 3 && row[3] != "" {
+			unitName = strings.TrimSpace(row[3])
+		}
+
+		chars := make(map[string]string)
+		if len(row) > 4 && row[4] != "" {
+			parts := strings.Split(row[4], ";")
+			for _, part := range parts {
+				kv := strings.Split(part, ":")
+				if len(kv) == 2 {
+					key := strings.TrimSpace(kv[0])
+					val := strings.TrimSpace(kv[1])
+					if key != "" && val != "" {
+						chars[key] = val
+					}
+				}
+			}
+		}
+
+		desc := ""
+		if len(row) > 5 {
+			desc = strings.TrimSpace(row[5])
+		}
+
+		importData = append(importData, models.ImportItemDTO{
+			CategoryName:    catName,
+			ProductName:     prodName,
+			SKU:             sku,
+			UnitName:        unitName,
+			Characteristics: chars,
+			Description:     desc,
+		})
+	}
+
+	if len(importData) == 0 {
+		return errors.New("no valid data found in file")
+	}
+
+	return s.repo.ImportBatch(importData)
 }

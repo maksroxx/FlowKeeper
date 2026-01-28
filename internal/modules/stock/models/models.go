@@ -28,6 +28,11 @@ type CharacteristicsMap map[string]string
 
 func (c CharacteristicsMap) Value() (driver.Value, error) { return json.Marshal(c) }
 func (c *CharacteristicsMap) Scan(value interface{}) error {
+	if value == nil {
+		*c = nil
+		return nil
+	}
+
 	var bytes []byte
 	switch v := value.(type) {
 	case []byte:

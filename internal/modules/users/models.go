@@ -15,10 +15,26 @@ func (p Permissions) Value() (driver.Value, error) {
 }
 
 func (p *Permissions) Scan(value interface{}) error {
-	bytes, ok := value.([]byte)
-	if !ok {
-		return errors.New("type assertion to []byte failed")
+	if value == nil {
+		*p = Permissions{}
+		return nil
 	}
+
+	var bytes []byte
+	switch v := value.(type) {
+	case []byte:
+		bytes = v
+	case string:
+		bytes = []byte(v)
+	default:
+		return errors.New("type assertion failed: value is not []byte or string")
+	}
+
+	if len(bytes) == 0 {
+		*p = Permissions{}
+		return nil
+	}
+
 	return json.Unmarshal(bytes, p)
 }
 
