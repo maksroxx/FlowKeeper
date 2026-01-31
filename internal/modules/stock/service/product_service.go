@@ -133,11 +133,13 @@ func (s *productService) ImportItems(file multipart.File, filename string) error
 	var rows [][]string
 	var err error
 
+	// 1. Читаем файл в зависимости от расширения
 	if strings.HasSuffix(strings.ToLower(filename), ".xlsx") {
 		f, err := excelize.OpenReader(file)
 		if err != nil {
 			return err
 		}
+		// Берем первый лист
 		sheetName := f.GetSheetName(0)
 		if sheetName == "" {
 			return errors.New("xlsx file is empty")
@@ -148,8 +150,13 @@ func (s *productService) ImportItems(file multipart.File, filename string) error
 		}
 	} else if strings.HasSuffix(strings.ToLower(filename), ".csv") {
 		reader := csv.NewReader(file)
-		reader.Comma = ';'
-		reader.LazyQuotes = true
+		reader.Comma = ';'       // Разделитель колонок — точка с запятой
+		reader.LazyQuotes = true // Разрешаем кавычки внутри полей
+
+		// ВАЖНО: Разрешаем переменное количество полей в строках,
+		// чтобы не получать ошибку "wrong number of fields"
+		reader.FieldsPerRecord = -1
+
 		rows, err = reader.ReadAll()
 		if err != nil {
 			return err
@@ -158,29 +165,35 @@ func (s *productService) ImportItems(file multipart.File, filename string) error
 		return errors.New("unsupported file format (use .csv or .xlsx)")
 	}
 
+	// Удаляем заголовок (первую строку), если он есть
 	if len(rows) > 0 {
+		// Простая проверка: если в первой ячейке слово "Категория"
 		firstCell := strings.ToLower(strings.TrimSpace(rows[0][0]))
 		if strings.Contains(firstCell, "категория") || strings.Contains(firstCell, "category") {
 			rows = rows[1:]
 		}
 	}
 
+	// 2. Парсим строки в DTO
 	var importData []models.ImportItemDTO
 
 	for _, row := range rows {
+		// Пропускаем пустые или слишком короткие строки (нужно хотя бы Категория, Имя, SKU)
 		if len(row) < 3 {
 			continue
 		}
 
 		catName := strings.TrimSpace(row[0])
+		if catName == "" {
+			catName = "Общее"
+		}
+
 		prodName := strings.TrimSpace(row[1])
 		sku := strings.TrimSpace(row[2])
 
+		// Если нет имени или артикула — строку пропускаем
 		if prodName == "" || sku == "" {
 			continue
-		}
-		if catName == "" {
-			catName = "Общее"
 		}
 
 		unitName := "шт"
@@ -188,9 +201,14 @@ func (s *productService) ImportItems(file multipart.File, filename string) error
 			unitName = strings.TrimSpace(row[3])
 		}
 
+		// --- ЛОГИКА ПАРСИНГА ХАРАКТЕРИСТИК ---
 		chars := make(map[string]string)
 		if len(row) > 4 && row[4] != "" {
-			parts := strings.Split(row[4], ";")
+			// Мы поддерживаем и запятую, и точку с запятой как разделитель пар Ключ:Значение.
+			// Заменяем все запятые на точки с запятой для унификации.
+			cleanChars := strings.ReplaceAll(row[4], ",", ";")
+
+			parts := strings.Split(cleanChars, ";")
 			for _, part := range parts {
 				kv := strings.Split(part, ":")
 				if len(kv) == 2 {
@@ -202,6 +220,7 @@ func (s *productService) ImportItems(file multipart.File, filename string) error
 				}
 			}
 		}
+		// -------------------------------------
 
 		desc := ""
 		if len(row) > 5 {
@@ -222,5 +241,6 @@ func (s *productService) ImportItems(file multipart.File, filename string) error
 		return errors.New("no valid data found in file")
 	}
 
+	// 3. Отправляем в репозиторий для пакетного сохранения
 	return s.repo.ImportBatch(importData)
 }

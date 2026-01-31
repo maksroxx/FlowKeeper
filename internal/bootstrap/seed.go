@@ -51,14 +51,14 @@ func Run(db *gorm.DB) {
 		log.Printf("❌ [BOOTSTRAP] Не удалось создать роль manager: %v", err)
 	}
 
-	err = createUser(db, "Super Admin", "admin@flowkeeper.com", "admin", adminRole.ID)
+	err = createUser(db, "Super Admin", "admin@sklad.com", "admin", adminRole.ID)
 	if err != nil {
 		log.Printf("❌ [BOOTSTRAP] КРИТИЧЕСКАЯ ОШИБКА: Не удалось создать админа: %v", err)
 	} else {
-		log.Println("✅ [BOOTSTRAP] Супер Админ успешно создан (admin@flowkeeper.com / admin)")
+		log.Println("✅ [BOOTSTRAP] Супер Админ успешно создан (admin@sklad.com / admin)")
 	}
 
-	createUser(db, "Sklad", "worker@flowkeeper.com", "user", workerRole.ID)
+	createUser(db, "Sklad", "worker@sklad.com", "user", workerRole.ID)
 
 	log.Println("--- [BOOTSTRAP] Завершено ---")
 }
