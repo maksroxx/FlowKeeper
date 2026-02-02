@@ -7,6 +7,7 @@ database:
   dsn: "./data/local.db"
 
 modules:
+  audit: true
   files: true
   system: true
   stock: true
@@ -18,3 +19,7 @@ modules:
 auth:
   jwt_secret: "super-secret-key-change-me-in-production"
   token_ttl_hours: 168
+
+audit:
+  batch_size: 50
+  flush_interval_seconds: 30

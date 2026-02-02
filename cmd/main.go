@@ -20,6 +20,7 @@ import (
 	"github.com/maksroxx/flowkeeper/internal/core"
 	"github.com/maksroxx/flowkeeper/internal/db"
 	"github.com/maksroxx/flowkeeper/internal/modules/analytics"
+	"github.com/maksroxx/flowkeeper/internal/modules/audit"
 	"github.com/maksroxx/flowkeeper/internal/modules/files"
 	"github.com/maksroxx/flowkeeper/internal/modules/reports"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock"
@@ -103,6 +104,10 @@ func main() {
 
 	app := core.NewApp(database, r)
 
+	auditModule := audit.NewModule(database, cfg.Audit)
+	auditModule.Service.StartWorker()
+	defer auditModule.Service.StopWorker()
+
 	if cfg.Modules.Files {
 		app.RegisterModule(files.NewModule())
 	}
@@ -133,7 +138,7 @@ func main() {
 
 	bootstrap.Run(database)
 	files.CleanupOrphanedImages(database)
-	api.InitAPI(r, app)
+	api.InitAPI(r, app, auditModule.Service, cfg.Auth)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 
