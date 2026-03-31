@@ -32,9 +32,10 @@ type VariantListItemDTO struct {
 	Characteristics CharacteristicsMap `json:"characteristics"`
 	UnitID          uint               `json:"unit_id"`
 	UnitName        string             `json:"unit_name"`
-
-	QuantityOnStock decimal.Decimal   `json:"quantity_on_stock"`
-	Images          []ProductImageDTO `json:"images"  gorm:"-"`
+	IsPublic        bool               `json:"is_public"`
+	IsFeatured      bool               `json:"is_featured"`
+	QuantityOnStock decimal.Decimal    `json:"quantity_on_stock"`
+	Images          []ProductImageDTO  `json:"images"  gorm:"-"`
 }
 
 type DocumentDTO struct {

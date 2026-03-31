@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
@@ -54,5 +55,23 @@ func LoadConfig(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}
+
+	if envHost := os.Getenv("SERVER_HOST"); envHost != "" {
+		cfg.Server.Host = envHost
+	}
+
+	if envPort := os.Getenv("SERVER_PORT"); envPort != "" {
+		if port, err := strconv.Atoi(envPort); err == nil {
+			cfg.Server.Port = port
+		}
+	}
+
+	if envDBDriver := os.Getenv("DB_DRIVER"); envDBDriver != "" {
+		cfg.Database.Driver = envDBDriver
+	}
+	if envDBDSN := os.Getenv("DB_DSN"); envDBDSN != "" {
+		cfg.Database.DSN = envDBDSN
+	}
+
 	return &cfg, nil
 }

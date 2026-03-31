@@ -20,9 +20,9 @@ import (
 	"github.com/maksroxx/flowkeeper/internal/core"
 	"github.com/maksroxx/flowkeeper/internal/db"
 	"github.com/maksroxx/flowkeeper/internal/modules/analytics"
-	"github.com/maksroxx/flowkeeper/internal/modules/audit"
 	"github.com/maksroxx/flowkeeper/internal/modules/files"
 	"github.com/maksroxx/flowkeeper/internal/modules/reports"
+	"github.com/maksroxx/flowkeeper/internal/modules/shop"
 	"github.com/maksroxx/flowkeeper/internal/modules/stock"
 	"github.com/maksroxx/flowkeeper/internal/modules/system"
 	"github.com/maksroxx/flowkeeper/internal/modules/users"
@@ -104,10 +104,6 @@ func main() {
 
 	app := core.NewApp(database, r)
 
-	auditModule := audit.NewModule(database, cfg.Audit)
-	auditModule.Service.StartWorker()
-	defer auditModule.Service.StopWorker()
-
 	if cfg.Modules.Files {
 		app.RegisterModule(files.NewModule())
 	}
@@ -132,13 +128,17 @@ func main() {
 		app.RegisterModule(reports.NewModule())
 	}
 
+	if cfg.Modules.Shop {
+		app.RegisterModule(shop.NewModule(cfg.Auth))
+	}
+
 	if err := app.Migrate(); err != nil {
 		log.Fatal("Migration failed: ", err)
 	}
 
 	bootstrap.Run(database)
 	files.CleanupOrphanedImages(database)
-	api.InitAPI(r, app, auditModule.Service, cfg.Auth)
+	api.InitAPI(r, app, cfg.Auth)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 
