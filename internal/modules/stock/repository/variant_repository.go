@@ -149,6 +149,7 @@ func (r *variantRepo) Search(filter models.VariantFilter) ([]models.VariantListI
 		"variants.id", "variants.product_id", "products.name as product_name",
 		"variants.sku", "variants.characteristics", "variants.unit_id", "units.name as unit_name",
 		"products.category_id", "categories.name as category_name",
+		"products.is_public", "products.is_featured",
 	}
 
 	enrichQuery := r.db.Model(&models.Variant{}).

@@ -2,6 +2,7 @@ package system
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -33,10 +34,7 @@ func (h *Handler) Register(r *gin.RouterGroup) {
 
 func (h *Handler) CreateBackup(c *gin.Context) {
 	if h.dbConf.Driver != "sqlite" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Резервное копирование через приложение доступно только для локальной базы (SQLite). " +
-				"Для PostgreSQL используйте стандартные инструменты (pg_dump/pgAdmin).",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Бэкап доступен только для SQLite"})
 		return
 	}
 
@@ -44,66 +42,87 @@ func (h *Handler) CreateBackup(c *gin.Context) {
 	tempPath := filepath.Join(os.TempDir(), tempName)
 
 	if err := h.db.Exec(fmt.Sprintf("VACUUM INTO '%s'", tempPath)).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create backup: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка создания бэкапа: " + err.Error()})
 		return
 	}
 	defer os.Remove(tempPath)
 
-	c.FileAttachment(tempPath, fmt.Sprintf("flowkeeper_backup_%s.db", time.Now().Format("2006-01-02_15-04")))
+	fileName := fmt.Sprintf("FlowKeeper_Backup_%s.db", time.Now().Format("2006-01-02_15-04"))
+	c.FileAttachment(tempPath, fileName)
 }
 
 func (h *Handler) RestoreBackup(c *gin.Context) {
 	if h.dbConf.Driver != "sqlite" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Восстановление из файла .db доступно только для локальной базы (SQLite).",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Восстановление доступно только для SQLite"})
 		return
 	}
 
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No file uploaded"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Файл не найден"})
 		return
 	}
 
-	currentDBPath := h.dbConf.DSN
-	if !filepath.IsAbs(currentDBPath) {
-		cwd, _ := os.Getwd()
-		currentDBPath = filepath.Join(cwd, currentDBPath)
-	}
-
+	dbPath := h.dbConf.DSN
 	sqlDB, err := h.db.DB()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get DB instance"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось получить доступ к БД"})
 		return
 	}
 	if err := sqlDB.Close(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to close DB connection: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось закрыть соединение: " + err.Error()})
 		return
 	}
 
-	tempRestorePath := currentDBPath + ".restore_tmp"
-	if err := c.SaveUploadedFile(file, tempRestorePath); err != nil {
-		reconnect(h)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save upload: " + err.Error()})
-		return
+	backupPath := dbPath + ".bak"
+	os.Remove(backupPath)
+	if err := os.Rename(dbPath, backupPath); err != nil {
+		if !os.IsNotExist(err) {
+			_ = reconnect(h)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка бэкапа текущей версии: " + err.Error()})
+			return
+		}
 	}
 
-	os.Rename(currentDBPath, currentDBPath+".bak")
-
-	if err := os.Rename(tempRestorePath, currentDBPath); err != nil {
-		os.Rename(currentDBPath+".bak", currentDBPath)
+	src, err := file.Open()
+	if err != nil {
+		os.Rename(backupPath, dbPath)
 		reconnect(h)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to replace DB file: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка чтения файла: " + err.Error()})
+		return
+	}
+	defer src.Close()
+
+	dst, err := os.Create(dbPath)
+	if err != nil {
+		os.Rename(backupPath, dbPath)
+		reconnect(h)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка создания файла БД: " + err.Error()})
+		return
+	}
+	defer dst.Close()
+
+	if _, err = io.Copy(dst, src); err != nil {
+		os.Rename(backupPath, dbPath)
+		reconnect(h)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка записи файла: " + err.Error()})
 		return
 	}
 
 	if err := reconnect(h); err != nil {
-		c.JSON(http.StatusOK, gin.H{"status": "restored_restart_required", "message": "База восстановлена. Пожалуйста, перезапустите приложение."})
+		os.Remove(dbPath)
+		os.Rename(backupPath, dbPath)
+		reconnect(h)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Загруженный файл не является валидной БД или поврежден. Восстановлена прежняя версия."})
 		return
 	}
-	os.Remove(currentDBPath + ".bak")
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "База успешно восстановлена"})
+
+	os.Remove(backupPath)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "ok",
+		"message": "База успешно восстановлена. Пожалуйста, перезайдите в систему.",
+	})
 }
 
 func reconnect(h *Handler) error {

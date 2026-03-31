@@ -14,7 +14,7 @@ modules:
   reports: true
   analytics: true
   users: true
-  shop: false
+  shop: true
 
 auth:
   jwt_secret: "super-secret-key-change-me-in-production"

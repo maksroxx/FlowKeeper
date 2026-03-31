@@ -14,6 +14,8 @@ type Product struct {
 	Name        string    `gorm:"unique;not null" json:"name"`
 	Description string    `json:"description"`
 	CategoryID  uint      `json:"category_id"`
+	IsPublic    bool      `gorm:"default:false" json:"is_public"`
+	IsFeatured  bool      `gorm:"default:false" json:"is_featured"`
 	Variants    []Variant `gorm:"constraint:OnDelete:CASCADE;" json:"variants"`
 }
 
