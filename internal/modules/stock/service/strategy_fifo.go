@@ -51,7 +51,8 @@ func (s *FifoQuantityStrategy) ProcessIncome(tx *gorm.DB, doc *models.Document, 
 
 		mv := &models.StockMovement{
 			DocumentID: &doc.ID, VariantID: it.VariantID, WarehouseID: *doc.WarehouseID,
-			Quantity: it.Quantity, Type: "INCOME", CreatedAt: time.Now(),
+			CounterpartyID: doc.CounterpartyID,
+			Quantity:       it.Quantity, Type: "INCOME", CreatedAt: time.Now(),
 		}
 		if _, err := s.movementRepo.CreateWithTx(tx, mv); err != nil {
 			return err
@@ -103,7 +104,8 @@ func (s *FifoQuantityStrategy) ProcessOutcome(tx *gorm.DB, doc *models.Document,
 
 			mv := &models.StockMovement{
 				DocumentID: &doc.ID, VariantID: lot.VariantID, WarehouseID: lot.WarehouseID,
-				Quantity: qtyFromLot.Neg(), Type: "OUTCOME", SourceLotID: &lot.ID, CreatedAt: time.Now(),
+				CounterpartyID: doc.CounterpartyID,
+				Quantity:       qtyFromLot.Neg(), Type: "OUTCOME", SourceLotID: &lot.ID, CreatedAt: time.Now(),
 			}
 			if _, err := s.movementRepo.CreateWithTx(tx, mv); err != nil {
 				return err
